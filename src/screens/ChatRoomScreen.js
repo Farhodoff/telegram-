@@ -31,6 +31,9 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Forward (Yo'naltirish) holati
+  const [isForwarding, setIsForwarding] = useState(false);
+
   const handleSend = () => {
     if (inputText.trim()) {
       if (editingMessage) {
@@ -75,8 +78,31 @@ export default function ChatRoomScreen({ route, navigation }) {
       case 'react':
         setReactionMessage(selectedMessage);
         break;
+      case 'forward':
+        setIsForwarding(true);
+        break;
     }
-    setSelectedMessage(null);
+    if (action !== 'forward') {
+      setSelectedMessage(null);
+    }
+  };
+
+  const handleForwardTo = (targetChatId) => {
+    if (selectedMessage) {
+      addMessage(targetChatId, {
+        id: Date.now().toString(),
+        text: selectedMessage.text,
+        sender: 'me',
+        time: 'Hozir',
+        isForwarded: true,
+        forwardedFrom: selectedMessage.sender === 'me' ? 'Siz' : chatName,
+        reactions: {}
+      });
+      setIsForwarding(false);
+      setSelectedMessage(null);
+      
+      Alert.alert('Muvaffaqiyatli', 'Xabar yo\'naltirildi!');
+    }
   };
 
   const handleReaction = (emoji) => {
@@ -174,6 +200,13 @@ export default function ChatRoomScreen({ route, navigation }) {
                 )}
                 <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text>
                 
+                {/* Forward info */}
+                {msg.isForwarded && (
+                  <Text style={[styles.forwardedText, isThem ? null : {color: '#E0E0E0'}]}>
+                    Forwarded from {msg.forwardedFrom}
+                  </Text>
+                )}
+
                 {/* Vaqt va Edit status */}
                 <View style={styles.timeRow}>
                   {msg.isEdited && <Text style={[styles.editedText, isThem ? null : {color: '#E0E0E0'}]}>edited </Text>}
@@ -268,6 +301,9 @@ export default function ChatRoomScreen({ route, navigation }) {
             <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('reply')}>
               <Text style={styles.actionBtnText}>Javob berish</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('forward')}>
+              <Text style={styles.actionBtnText}>Yo'naltirish (Forward)</Text>
+            </TouchableOpacity>
             {selectedMessage?.sender === 'me' && (
               <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('edit')}>
                 <Text style={styles.actionBtnText}>Tahrirlash</Text>
@@ -291,6 +327,32 @@ export default function ChatRoomScreen({ route, navigation }) {
             ))}
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Forward Chat List Modal */}
+      <Modal visible={isForwarding} animationType="slide" transparent>
+        <View style={styles.forwardModalOverlay}>
+          <View style={[styles.forwardModalContent, isDark && styles.forwardModalContentDark]}>
+            <View style={styles.forwardModalHeader}>
+              <Text style={[styles.forwardModalTitle, isDark && styles.textDark]}>Chatni tanlang</Text>
+              <TouchableOpacity onPress={() => setIsForwarding(false)} style={{padding: 8}}>
+                <Text style={{fontSize: 18, color: isDark ? '#FFF' : '#000'}}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {Object.values(chats).map(chat => (
+                <TouchableOpacity 
+                  key={chat.id} 
+                  style={[styles.forwardChatItem, isDark && styles.forwardChatItemDark]}
+                  onPress={() => handleForwardTo(chat.id)}
+                >
+                  <View style={styles.forwardAvatar}><Text style={{color: '#FFF'}}>{chat.name.substring(0,2)}</Text></View>
+                  <Text style={[styles.forwardChatName, isDark && styles.textDark]}>{chat.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
 
     </SafeAreaView>
@@ -322,6 +384,7 @@ const styles = StyleSheet.create({
   timeRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4, alignItems: 'center' },
   msgTime: { fontSize: 11, color: '#8E8E93' },
   editedText: { fontSize: 11, color: '#8E8E93', fontStyle: 'italic' },
+  forwardedText: { fontSize: 12, color: '#8E8E93', fontStyle: 'italic', marginTop: 2 },
   inputContainer: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E5E5EA', paddingBottom: Platform.OS === 'ios' ? 0 : 16 },
   inputContainerDark: { backgroundColor: '#1C1C1E', borderTopColor: '#38383A' },
   inputRow: { flexDirection: 'row', padding: 8, alignItems: 'center' },
@@ -356,5 +419,16 @@ const styles = StyleSheet.create({
   emojiText: { fontSize: 32 },
   reactionsContainer: { flexDirection: 'row', marginTop: 4, flexWrap: 'wrap' },
   reactionBadge: { backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12, paddingHorizontal: 6, paddingVertical: 2, marginRight: 4, marginTop: 4 },
-  reactionText: { fontSize: 12 }
+  reactionText: { fontSize: 12 },
+
+  // Forward Modal styles
+  forwardModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  forwardModalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '60%', paddingBottom: 30 },
+  forwardModalContentDark: { backgroundColor: '#1C1C1E' },
+  forwardModalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E5EA' },
+  forwardModalTitle: { fontSize: 18, fontWeight: 'bold' },
+  forwardChatItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F2F2F7', alignItems: 'center' },
+  forwardChatItemDark: { borderBottomColor: '#2C2C2E' },
+  forwardAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#0088CC', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  forwardChatName: { fontSize: 16, fontWeight: '500' }
 });
