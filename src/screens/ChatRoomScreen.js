@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ImageBackground, Modal, Alert, Image, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Audio } from 'expo-av';
+import { Audio, Video } from 'expo-av';
 import * as Location from 'expo-location';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { TimezoneSelector } from '../components/settings/TimezoneSelector';
 import { TimezoneBadge } from '../components/chat/TimezoneBadge';
 import { ReminderCard } from '../components/chat/ReminderCard';
@@ -12,18 +13,25 @@ import { useUserStore } from '../store/useUserStore';
 
 export default function ChatRoomScreen({ route, navigation }) {
   const { chatId, chatName } = route.params;
-  const { user, settings, chats, addMessage, deleteMessage, editMessage, addReaction, setWallpaper, translateMessage, votePoll, markAsViewed } = useUserStore();
+  const { chats, settings, addMessage, deleteMessage, editMessage, translateMessage, markAsViewed, votePoll, addReaction, setChatWallpaper } = useUserStore();
+  
+  const chat = chats[chatId] || { messages: [], wallpaper: null };
   const isDark = settings.theme === 'dark';
   
-  const currentChat = chats[chatId] || { messages: [] };
-  const messages = currentChat.messages;
-
   const [inputText, setInputText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   
   // Tahrirlash (Edit) holati
   const [editingMessage, setEditingMessage] = useState(null);
   
+  // Voice & Video message
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordMode, setRecordMode] = useState('audio'); // 'audio' or 'video'
+  const cameraRef = useRef(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
+
   // Long-press menyusi (ActionSheet modal simulyatsiyasi)
   const [selectedMessage, setSelectedMessage] = useState(null);
   
@@ -38,7 +46,6 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [isForwarding, setIsForwarding] = useState(false);
 
   // Ovozli xabar holati
-  const [recording, setRecording] = useState();
   const [sound, setSound] = useState();
   const [playingAudioId, setPlayingAudioId] = useState(null);
 
@@ -47,7 +54,7 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [isCreatePollOpen, setIsCreatePollOpen] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
-  const [viewOnceImage, setViewOnceImage] = useState(null); // {id, uri} yoki null
+  const [viewOnceImage, setViewOnceImage] = useState(null);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
 
   // Soundni tozalash
@@ -77,6 +84,16 @@ export default function ChatRoomScreen({ route, navigation }) {
       }
       setInputText('');
       setReplyingTo(null);
+    }
+  };
+
+  const pickWallpaper = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setChatWallpaper(chatId, result.assets[0].uri);
     }
   };
 
@@ -211,43 +228,57 @@ export default function ChatRoomScreen({ route, navigation }) {
       };
       addMessage(chatId, newPoll);
       setIsCreatePollOpen(false);
-      setPollQuestion('');
       setPollOptions(['', '']);
     } else {
       Alert.alert('Xatolik', 'Savol va kamida 2 ta variant kiriting');
     }
   };
 
+  const toggleRecordMode = () => {
+    setRecordMode(prev => prev === 'audio' ? 'video' : 'audio');
+  };
+
   const startRecording = async () => {
     try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
+      if (recordMode === 'audio') {
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') return;
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+        const { recording } = await Audio.Recording.createAsync( Audio.RecordingOptionsPresets.HIGH_QUALITY );
+        setRecording(recording);
+        setIsRecording(true);
+      } else {
+        if (!cameraPermission?.granted) await requestCameraPermission();
+        if (!microphonePermission?.granted) await requestMicrophonePermission();
+        setIsRecording(true);
+        if (cameraRef.current) {
+          cameraRef.current.recordAsync().then(videoRecord => {
+            if (videoRecord) {
+              const newMessage = { id: Date.now().toString(), text: '', videoUrl: videoRecord.uri, sender: 'me', time: 'Hozir', reactions: {} };
+              addMessage(chatId, newMessage);
+            }
+          });
+        }
+      }
     } catch (err) {
-      Alert.alert('Xatolik', 'Mikrofonga ruxsat bering');
+      console.error('Recording failed', err);
     }
   };
 
   const stopRecording = async () => {
-    if (!recording) return;
-    setRecording(undefined);
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    
-    if (uri) {
-      const newMessage = { 
-        id: Date.now().toString(), 
-        text: '', 
-        audioUrl: uri,
-        sender: 'me', 
-        time: 'Hozir',
-        reactions: {}
-      };
+    if (recordMode === 'audio') {
+      setIsRecording(false);
+      if (!recording) return;
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      const newMessage = { id: Date.now().toString(), text: '', audioUrl: uri, sender: 'me', time: 'Hozir', reactions: {} };
       addMessage(chatId, newMessage);
+    } else {
+      setIsRecording(false);
+      if (cameraRef.current) {
+        cameraRef.current.stopRecording();
+      }
     }
   };
 
@@ -284,18 +315,163 @@ export default function ChatRoomScreen({ route, navigation }) {
     }
   };
 
-  const lastIncomingMessage = messages.filter(m => m.sender === 'them').pop();
+  const renderMessage = ({ item: msg }) => {
+    const isThem = msg.sender === 'them';
+    const hasReactions = msg.reactions && Object.keys(msg.reactions).length > 0;
+    
+    return (
+      <View style={{ marginBottom: 16 }}>
+        <TouchableOpacity 
+          activeOpacity={0.8}
+          onLongPress={() => setSelectedMessage(msg)}
+          delayLongPress={300}
+          style={[styles.bubble, isThem ? (isDark ? styles.bubbleThemDark : styles.bubbleThem) : styles.bubbleMe]}
+        >
+          {msg.replyToText && (
+            <View style={[styles.replyBoxInBubble, isThem ? (isDark ? styles.replyBoxThemDark : styles.replyBoxThem) : styles.replyBoxMe]}>
+              <Text style={[styles.replySenderInBubble, isThem ? styles.replySenderThem : styles.replySenderMe]}>
+                {msg.replyToSender === 'me' ? 'Siz' : 'Suhbatdosh'}
+              </Text>
+              <Text numberOfLines={1} style={[styles.replyTextInBubble, isThem ? (isDark ? styles.textDark : {color: '#000'}) : styles.textMe]}>
+                {msg.replyToText}
+              </Text>
+            </View>
+          )}
+          <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text>
+          
+          {msg.isForwarded && (
+            <Text style={[styles.forwardedText, isThem ? null : {color: '#E0E0E0'}]}>
+              Forwarded from {msg.forwardedFrom}
+            </Text>
+          )}
 
-  // Qidiruv filtri
-  const displayMessages = messages.filter(msg => 
-    isSearching && searchQuery.trim() !== '' 
-      ? msg.text.toLowerCase().includes(searchQuery.toLowerCase())
-      : true
-  );
+          {msg.imageUrl && !msg.isViewOnce && (
+            <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
+          )}
+
+          {msg.imageUrl && msg.isViewOnce && (
+            <TouchableOpacity 
+              style={[styles.viewOnceBtn, isThem && !isDark && {borderColor: '#0088CC'}]}
+              onPress={() => {
+                if (!msg.isViewed) {
+                  setViewOnceImage({ id: msg.id, uri: msg.imageUrl });
+                }
+              }}
+              disabled={msg.isViewed}
+            >
+              <Text style={{fontSize: 20, marginRight: 8}}>💣</Text>
+              <Text style={{color: isThem ? (isDark ? '#FFF' : '#0088CC') : '#FFF', fontWeight: 'bold'}}>
+                {msg.isViewed ? 'Ochilgan' : '1 marta ko\'rish'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {msg.location && (
+            <TouchableOpacity 
+              style={styles.locationContainer}
+              onPress={() => Linking.openURL(`https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}`)}
+            >
+              <Text style={{fontSize: 30, textAlign: 'center'}}>📍</Text>
+              <Text style={{color: isThem ? (isDark ? '#888' : '#0088CC') : '#FFF', marginTop: 4, fontWeight: 'bold'}}>Xaritada ochish</Text>
+            </TouchableOpacity>
+          )}
+
+          {msg.videoUrl && (
+            <View style={styles.videoNoteContainer}>
+              <Video
+                source={{ uri: msg.videoUrl }}
+                style={styles.videoNote}
+                useNativeControls={false}
+                resizeMode="cover"
+                isLooping
+                shouldPlay
+                isMuted={false}
+              />
+            </View>
+          )}
+
+          {msg.audioUrl && (
+            <View style={styles.audioContainer}>
+              <TouchableOpacity 
+                style={[styles.playBtn, isThem && !isDark && {backgroundColor: '#0088CC'}, isThem && isDark && {backgroundColor: '#555'}]} 
+                onPress={() => playingAudioId === msg.id ? stopSound() : playSound(msg.audioUrl, msg.id)}
+              >
+                <Text style={{color: '#FFF', fontSize: 16}}>{playingAudioId === msg.id ? '⏸' : '▶️'}</Text>
+              </TouchableOpacity>
+              <View style={styles.audioWaveform}>
+                <View style={styles.waveLine} />
+                <View style={[styles.waveLine, {height: 12}]} />
+                <View style={[styles.waveLine, {height: 8}]} />
+                <View style={[styles.waveLine, {height: 16}]} />
+                <View style={styles.waveLine} />
+              </View>
+              <Text style={{fontSize: 12, color: isThem ? (isDark ? '#888' : '#888') : '#FFF', marginLeft: 8}}>0:05</Text>
+            </View>
+          )}
+
+          {msg.type === 'poll' && (
+            <View style={styles.pollContainer}>
+              <Text style={[styles.pollQuestion, isThem ? (isDark ? styles.textDark : {color: '#000'}) : {color: '#FFF'}]}>📊 {msg.question}</Text>
+              {msg.options.map((opt, index) => {
+                const totalVotes = msg.options.reduce((sum, o) => sum + o.votes, 0);
+                const percent = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
+                return (
+                  <TouchableOpacity 
+                    key={index} 
+                    style={styles.pollOptionBtn} 
+                    onPress={() => votePoll(chatId, msg.id, index)}
+                    disabled={msg.votedByMe !== null && msg.votedByMe !== undefined}
+                  >
+                    <View style={[styles.pollOptionProgress, { width: `${percent}%` }]} />
+                    <View style={styles.pollOptionContent}>
+                      <Text style={styles.pollOptionText}>{opt.text}</Text>
+                      {totalVotes > 0 && <Text style={styles.pollPercentText}>{percent}%</Text>}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              <Text style={styles.pollTotalVotes}>{msg.options.reduce((s, o) => s + o.votes, 0)} ta ovoz</Text>
+            </View>
+          )}
+
+          {msg.translatedText && (
+            <View style={{marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(150,150,150,0.3)'}}>
+              <Text style={[isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe, {fontStyle: 'italic', fontSize: 14}]}>
+                {msg.translatedText}
+              </Text>
+            </View>
+          )}
+          
+          <View style={styles.timeRow}>
+            {msg.isEdited && <Text style={[styles.editedText, isThem ? null : {color: '#E0E0E0'}]}>edited </Text>}
+            <Text style={[styles.msgTime, isThem ? (isDark ? {color: '#888'} : null) : {color: '#E0E0E0'}]}>{msg.time}</Text>
+          </View>
+
+          {hasReactions && (
+            <View style={styles.reactionsContainer}>
+              {Object.entries(msg.reactions).map(([emoji, count]) => (
+                <View key={emoji} style={styles.reactionBadge}>
+                  <Text style={styles.reactionText}>{emoji} {count > 1 ? count : ''}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        {isThem && detectReminderIntent(msg.text) && (
+          <ReminderCard 
+            messageText={msg.text} 
+            onDismiss={() => {}} 
+          />
+        )}
+      </View>
+    );
+  };
+
+  const lastIncomingMessage = chat.messages.filter(m => m.sender === 'them').pop();
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, isDark && styles.headerDark]}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={{padding: 8, marginLeft: -8}}>
@@ -322,190 +498,26 @@ export default function ChatRoomScreen({ route, navigation }) {
         {!isSearching && (
           <View style={styles.headerControls}>
             <TimezoneSelector />
-            <TouchableOpacity 
-              style={styles.wallpaperBtn} 
-              onPress={() => setWallpaper(settings.wallpaper ? null : 'https://i.pinimg.com/originals/8c/98/99/8c98994518b575bfd8c949e91d20548b.jpg')}
-            >
-              <Text style={styles.wallpaperBtnText}>{settings.wallpaper ? 'Fonni o\'chirish' : 'Fonni o\'zgartirish'}</Text>
-            </TouchableOpacity>
           </View>
         )}
       </View>
 
-      {/* Chat Area */}
       <ImageBackground 
-        source={settings.wallpaper ? { uri: settings.wallpaper } : null} 
-        style={[styles.chatArea, isDark && !settings.wallpaper ? styles.chatAreaDark : null]}
-        imageStyle={{ opacity: isDark ? 0.5 : 1 }}
+        source={chat.wallpaper ? {uri: chat.wallpaper} : null} 
+        style={[styles.messagesContainer, !chat.wallpaper && (isDark && styles.messagesContainerDark)]}
+        imageStyle={{opacity: 0.5}}
       >
-        <ScrollView contentContainerStyle={{ padding: 16 }}>
-        {/* Chat header'dagi timezone badge */}
-        {chatId !== 'saved' && (
-          <View style={styles.chatProfileHeader}>
-            <Text style={[styles.chatName, isDark && styles.textDark, settings.wallpaper && {color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4}]}>{chatName}</Text>
-            <TimezoneBadge timezone={user.timezone || 'Asia/Tashkent'} isDarkMode={isDark} />
-          </View>
-        )}
-
-        {displayMessages.map(msg => {
-          const isThem = msg.sender === 'them';
-          const hasReactions = msg.reactions && Object.keys(msg.reactions).length > 0;
-          
-          return (
-            <View key={msg.id} style={{ marginBottom: 16 }}>
-              <TouchableOpacity 
-                activeOpacity={0.8}
-                onLongPress={() => setSelectedMessage(msg)}
-                delayLongPress={300}
-                style={[styles.bubble, isThem ? (isDark ? styles.bubbleThemDark : styles.bubbleThem) : styles.bubbleMe]}
-              >
-                {/* Reply info ko'rsatish */}
-                {msg.replyToText && (
-                  <View style={[styles.replyBoxInBubble, isThem ? (isDark ? styles.replyBoxThemDark : styles.replyBoxThem) : styles.replyBoxMe]}>
-                    <Text style={[styles.replySenderInBubble, isThem ? styles.replySenderThem : styles.replySenderMe]}>
-                      {msg.replyToSender === 'me' ? 'Siz' : 'Suhbatdosh'}
-                    </Text>
-                    <Text numberOfLines={1} style={[styles.replyTextInBubble, isThem ? (isDark ? styles.textDark : {color: '#000'}) : styles.textMe]}>
-                      {msg.replyToText}
-                    </Text>
-                  </View>
-                )}
-                <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text>
-                
-                {/* Forward info */}
-                {msg.isForwarded && (
-                  <Text style={[styles.forwardedText, isThem ? null : {color: '#E0E0E0'}]}>
-                    Forwarded from {msg.forwardedFrom}
-                  </Text>
-                )}
-
-                {/* Rasm mavjud bo'lsa */}
-                {msg.imageUrl && !msg.isViewOnce && (
-                  <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
-                )}
-
-                {/* 1 marta ko'riladigan rasm mavjud bo'lsa */}
-                {msg.imageUrl && msg.isViewOnce && (
-                  <TouchableOpacity 
-                    style={[styles.viewOnceBtn, isThem && !isDark && {borderColor: '#0088CC'}]}
-                    onPress={() => {
-                      if (!msg.isViewed) {
-                        setViewOnceImage({ id: msg.id, uri: msg.imageUrl });
-                      }
-                    }}
-                    disabled={msg.isViewed}
-                  >
-                    <Text style={{fontSize: 20, marginRight: 8}}>💣</Text>
-                    <Text style={{color: isThem ? (isDark ? '#FFF' : '#0088CC') : '#FFF', fontWeight: 'bold'}}>
-                      {msg.isViewed ? 'Ochilgan' : '1 marta ko\'rish'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Joylashuv (Location) mavjud bo'lsa */}
-                {msg.location && (
-                  <TouchableOpacity 
-                    style={styles.locationContainer}
-                    onPress={() => Linking.openURL(`https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}`)}
-                  >
-                    <Text style={{fontSize: 30, textAlign: 'center'}}>📍</Text>
-                    <Text style={{color: isThem ? (isDark ? '#888' : '#0088CC') : '#FFF', marginTop: 4, fontWeight: 'bold'}}>Xaritada ochish</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Ovozli xabar mavjud bo'lsa */}
-                {msg.audioUrl && (
-                  <View style={styles.audioContainer}>
-                    <TouchableOpacity 
-                      style={[styles.playBtn, isThem && !isDark && {backgroundColor: '#0088CC'}, isThem && isDark && {backgroundColor: '#555'}]} 
-                      onPress={() => playingAudioId === msg.id ? stopSound() : playSound(msg.audioUrl, msg.id)}
-                    >
-                      <Text style={{color: '#FFF', fontSize: 16}}>{playingAudioId === msg.id ? '⏸' : '▶️'}</Text>
-                    </TouchableOpacity>
-                    <View style={styles.audioWaveform}>
-                      <View style={styles.waveLine} />
-                      <View style={[styles.waveLine, {height: 12}]} />
-                      <View style={[styles.waveLine, {height: 8}]} />
-                      <View style={[styles.waveLine, {height: 16}]} />
-                      <View style={styles.waveLine} />
-                    </View>
-                    <Text style={{fontSize: 12, color: isThem ? (isDark ? '#888' : '#888') : '#FFF', marginLeft: 8}}>0:05</Text>
-                  </View>
-                )}
-
-                {/* So'rovnoma (Poll) mavjud bo'lsa */}
-                {msg.type === 'poll' && (
-                  <View style={styles.pollContainer}>
-                    <Text style={[styles.pollQuestion, isThem ? (isDark ? styles.textDark : {color: '#000'}) : {color: '#FFF'}]}>📊 {msg.question}</Text>
-                    {msg.options.map((opt, index) => {
-                      const totalVotes = msg.options.reduce((sum, o) => sum + o.votes, 0);
-                      const percent = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
-                      return (
-                        <TouchableOpacity 
-                          key={index} 
-                          style={styles.pollOptionBtn} 
-                          onPress={() => votePoll(chatId, msg.id, index)}
-                          disabled={msg.votedByMe !== null && msg.votedByMe !== undefined}
-                        >
-                          <View style={[styles.pollOptionProgress, { width: `${percent}%` }]} />
-                          <View style={styles.pollOptionContent}>
-                            <Text style={styles.pollOptionText}>{opt.text}</Text>
-                            {totalVotes > 0 && <Text style={styles.pollPercentText}>{percent}%</Text>}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                    <Text style={styles.pollTotalVotes}>{msg.options.reduce((s, o) => s + o.votes, 0)} ta ovoz</Text>
-                  </View>
-                )}
-
-                {msg.text ? <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text> : null}
-                
-                {/* Tarjima qilingan matn */}
-                {msg.translatedText && (
-                  <View style={{marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(150,150,150,0.3)'}}>
-                    <Text style={[isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe, {fontStyle: 'italic', fontSize: 14}]}>
-                      {msg.translatedText}
-                    </Text>
-                  </View>
-                )}
-                
-                {/* Vaqt va Edit status */}
-                <View style={styles.timeRow}>
-                  {msg.isEdited && <Text style={[styles.editedText, isThem ? null : {color: '#E0E0E0'}]}>edited </Text>}
-                  <Text style={[styles.msgTime, isThem ? (isDark ? {color: '#888'} : null) : {color: '#E0E0E0'}]}>{msg.time}</Text>
-                </View>
-
-                {/* Emojilar ko'rsatkichi */}
-                {hasReactions && (
-                  <View style={styles.reactionsContainer}>
-                    {Object.entries(msg.reactions).map(([emoji, count]) => (
-                      <View key={emoji} style={styles.reactionBadge}>
-                        <Text style={styles.reactionText}>{emoji} {count > 1 ? count : ''}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </TouchableOpacity>
-              
-              {/* Eslatma qo'shish kartasi (MCR) */}
-              {isThem && detectReminderIntent(msg.text) && (
-                <ReminderCard 
-                  messageText={msg.text} 
-                  onDismiss={() => {}} 
-                />
-              )}
-            </View>
-          );
-        })}
-        </ScrollView>
+        <FlatList
+          data={chat.messages}
+          keyExtractor={item => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={{ padding: 16 }}
+        />
       </ImageBackground>
 
-      {/* Input Area */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={[styles.inputContainer, isDark && styles.inputContainerDark]}>
           
-          {/* Reply Bar */}
           {replyingTo && (
             <View style={[styles.replyBar, isDark && styles.replyBarDark]}>
               <View style={styles.replyBarContent}>
@@ -518,7 +530,6 @@ export default function ChatRoomScreen({ route, navigation }) {
             </View>
           )}
 
-          {/* Edit Bar */}
           {editingMessage && (
             <View style={[styles.replyBar, isDark && styles.replyBarDark]}>
               <View style={styles.replyBarContent}>
@@ -531,7 +542,6 @@ export default function ChatRoomScreen({ route, navigation }) {
             </View>
           )}
 
-          {/* Aqlli javob takliflari (SR) */}
           <SmartReplySuggestions 
             lastIncomingMessage={lastIncomingMessage?.text}
             onSelectReply={setInputText}
@@ -561,16 +571,26 @@ export default function ChatRoomScreen({ route, navigation }) {
             ) : (
               <TouchableOpacity 
                 style={styles.micBtn} 
-                onPress={recording ? stopRecording : startRecording}
+                onPress={toggleRecordMode}
+                onPressIn={startRecording}
+                onPressOut={stopRecording}
               >
-                <Text style={{fontSize: 20}}>{recording ? '🔴' : '🎙'}</Text>
+                <Text style={{fontSize: 20, color: '#FFF'}}>
+                  {isRecording ? '🛑' : (recordMode === 'audio' ? '🎤' : '📷')}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
+        {isRecording && recordMode === 'video' && (
+          <View style={styles.cameraOverlay}>
+            <View style={styles.cameraCircle}>
+              <CameraView ref={cameraRef} style={{flex: 1}} facing="front" mode="video" />
+            </View>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
-      {/* Message Action Menu Modal */}
       <Modal transparent visible={!!selectedMessage} animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedMessage(null)}>
           <View style={[styles.actionSheet, isDark && styles.actionSheetDark]}>
@@ -654,6 +674,9 @@ export default function ChatRoomScreen({ route, navigation }) {
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); setIsCreatePollOpen(true); }}>
               <Text style={styles.actionBtnText}>📊 So'rovnoma yaratish</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickWallpaper(); }}>
+              <Text style={styles.actionBtnText}>🖼 Fon rasmini o'zgartirish</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -845,5 +868,11 @@ const styles = StyleSheet.create({
   closeImageBtn: { position: 'absolute', bottom: 50, padding: 16, backgroundColor: 'rgba(255,0,0,0.8)', borderRadius: 24 },
 
   // Location
-  locationContainer: { padding: 16, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
+  locationContainer: { padding: 16, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+
+  // Video Notes
+  videoNoteContainer: { width: 160, height: 160, borderRadius: 80, overflow: 'hidden', backgroundColor: '#000', marginVertical: 4 },
+  videoNote: { width: '100%', height: '100%' },
+  cameraOverlay: { position: 'absolute', bottom: 80, right: 20, width: 200, height: 200, borderRadius: 100, overflow: 'hidden', elevation: 10, shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 10 },
+  cameraCircle: { flex: 1, borderRadius: 100, overflow: 'hidden', backgroundColor: '#000' }
 });
