@@ -130,6 +130,29 @@ export const useUserStore = create((set) => ({
     };
   }),
 
+  // So'rovnomaga ovoz berish
+  votePoll: (chatId, messageId, optionIndex) => set((state) => {
+    const chat = state.chats[chatId];
+    if (!chat) return state;
+    return {
+      chats: {
+        ...state.chats,
+        [chatId]: {
+          ...chat,
+          messages: chat.messages.map(msg => {
+            if (msg.id === messageId && msg.type === 'poll') {
+              if (msg.votedByMe !== undefined && msg.votedByMe !== null) return msg; // Faqat bir marta ovoz berish mumkin
+              const newOptions = [...msg.options];
+              newOptions[optionIndex].votes += 1;
+              return { ...msg, options: newOptions, votedByMe: optionIndex };
+            }
+            return msg;
+          })
+        }
+      }
+    };
+  }),
+
   // Emojini qo'shish (reaksiya)
   addReaction: (chatId, messageId, reactionEmoji) => set((state) => {
     const chat = state.chats[chatId];

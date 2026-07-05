@@ -11,7 +11,7 @@ import { useUserStore } from '../store/useUserStore';
 
 export default function ChatRoomScreen({ route, navigation }) {
   const { chatId, chatName } = route.params;
-  const { user, settings, chats, addMessage, deleteMessage, editMessage, addReaction, setWallpaper, translateMessage } = useUserStore();
+  const { user, settings, chats, addMessage, deleteMessage, editMessage, addReaction, setWallpaper, translateMessage, votePoll } = useUserStore();
   const isDark = settings.theme === 'dark';
   
   const currentChat = chats[chatId] || { messages: [] };
@@ -40,6 +40,12 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [recording, setRecording] = useState();
   const [sound, setSound] = useState();
   const [playingAudioId, setPlayingAudioId] = useState(null);
+
+  // Attachment va Poll (So'rovnoma) holati
+  const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
+  const [isCreatePollOpen, setIsCreatePollOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
 
   // Soundni tozalash
   useEffect(() => {
@@ -137,6 +143,27 @@ export default function ChatRoomScreen({ route, navigation }) {
         reactions: {}
       };
       addMessage(chatId, newMessage);
+    }
+  };
+
+  const handleCreatePoll = () => {
+    if (pollQuestion.trim() && pollOptions[0].trim() && pollOptions[1].trim()) {
+      const newPoll = {
+        id: Date.now().toString(),
+        type: 'poll',
+        question: pollQuestion,
+        options: pollOptions.filter(o => o.trim()).map(opt => ({ text: opt, votes: 0 })),
+        votedByMe: null,
+        sender: 'me',
+        time: 'Hozir',
+        reactions: {}
+      };
+      addMessage(chatId, newPoll);
+      setIsCreatePollOpen(false);
+      setPollQuestion('');
+      setPollOptions(['', '']);
+    } else {
+      Alert.alert('Xatolik', 'Savol va kamida 2 ta variant kiriting');
     }
   };
 
@@ -326,6 +353,32 @@ export default function ChatRoomScreen({ route, navigation }) {
                   </View>
                 )}
 
+                {/* So'rovnoma (Poll) mavjud bo'lsa */}
+                {msg.type === 'poll' && (
+                  <View style={styles.pollContainer}>
+                    <Text style={[styles.pollQuestion, isThem ? (isDark ? styles.textDark : {color: '#000'}) : {color: '#FFF'}]}>📊 {msg.question}</Text>
+                    {msg.options.map((opt, index) => {
+                      const totalVotes = msg.options.reduce((sum, o) => sum + o.votes, 0);
+                      const percent = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
+                      return (
+                        <TouchableOpacity 
+                          key={index} 
+                          style={styles.pollOptionBtn} 
+                          onPress={() => votePoll(chatId, msg.id, index)}
+                          disabled={msg.votedByMe !== null && msg.votedByMe !== undefined}
+                        >
+                          <View style={[styles.pollOptionProgress, { width: `${percent}%` }]} />
+                          <View style={styles.pollOptionContent}>
+                            <Text style={styles.pollOptionText}>{opt.text}</Text>
+                            {totalVotes > 0 && <Text style={styles.pollPercentText}>{percent}%</Text>}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    <Text style={styles.pollTotalVotes}>{msg.options.reduce((s, o) => s + o.votes, 0)} ta ovoz</Text>
+                  </View>
+                )}
+
                 {msg.text ? <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text> : null}
                 
                 {/* Tarjima qilingan matn */}
@@ -406,7 +459,7 @@ export default function ChatRoomScreen({ route, navigation }) {
           />
 
           <View style={styles.inputRow}>
-            <TouchableOpacity style={styles.attachBtn} onPress={pickImage}>
+            <TouchableOpacity style={styles.attachBtn} onPress={() => setIsAttachmentOpen(true)}>
               <Text style={{fontSize: 22}}>📎</Text>
             </TouchableOpacity>
             <TextInput
@@ -502,6 +555,72 @@ export default function ChatRoomScreen({ route, navigation }) {
         </View>
       </Modal>
 
+      {/* Attachment Modal */}
+      <Modal transparent visible={isAttachmentOpen} animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsAttachmentOpen(false)}>
+          <View style={[styles.actionSheet, isDark && styles.actionSheetDark, { marginBottom: 80, alignSelf: 'center' }]}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(); }}>
+              <Text style={styles.actionBtnText}>🖼 Rasm yuborish</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); setIsCreatePollOpen(true); }}>
+              <Text style={styles.actionBtnText}>📊 So'rovnoma yaratish</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Create Poll Modal */}
+      <Modal transparent visible={isCreatePollOpen} animationType="slide">
+        <View style={styles.forwardModalOverlay}>
+          <View style={[styles.forwardModalContent, isDark && styles.forwardModalContentDark, {height: '80%'}]}>
+            <View style={styles.forwardModalHeader}>
+              <Text style={[styles.forwardModalTitle, isDark && styles.textDark]}>So'rovnoma</Text>
+              <TouchableOpacity onPress={() => setIsCreatePollOpen(false)} style={{padding: 8}}>
+                <Text style={{fontSize: 18, color: isDark ? '#FFF' : '#000'}}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{padding: 16}}>
+              <Text style={{color: isDark ? '#888' : '#888', marginBottom: 8}}>Savol</Text>
+              <TextInput 
+                style={[styles.input, isDark && styles.inputDark, {marginBottom: 24}]} 
+                placeholder="Savol bering..." 
+                placeholderTextColor="#888" 
+                value={pollQuestion} 
+                onChangeText={setPollQuestion}
+                color={isDark ? '#FFF' : '#000'}
+              />
+              
+              <Text style={{color: isDark ? '#888' : '#888', marginBottom: 8}}>Variantlar</Text>
+              {pollOptions.map((opt, i) => (
+                <TextInput 
+                  key={i}
+                  style={[styles.input, isDark && styles.inputDark, {marginBottom: 12}]} 
+                  placeholder={`Variant ${i+1}`} 
+                  placeholderTextColor="#888" 
+                  value={opt} 
+                  onChangeText={(text) => {
+                    const newOpts = [...pollOptions];
+                    newOpts[i] = text;
+                    setPollOptions(newOpts);
+                  }}
+                  color={isDark ? '#FFF' : '#000'}
+                />
+              ))}
+              <TouchableOpacity 
+                style={{padding: 12, alignItems: 'center'}} 
+                onPress={() => setPollOptions([...pollOptions, ''])}
+              >
+                <Text style={{color: '#0088CC'}}>+ Variant qo'shish</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.sendBtn, {backgroundColor: '#0088CC', borderRadius: 8, marginTop: 24}]} onPress={handleCreatePoll}>
+                <Text style={{color: '#FFF', textAlign: 'center', fontSize: 16, fontWeight: 'bold'}}>Yaratish</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -584,5 +703,15 @@ const styles = StyleSheet.create({
   forwardChatItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F2F2F7', alignItems: 'center' },
   forwardChatItemDark: { borderBottomColor: '#2C2C2E' },
   forwardAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#0088CC', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  forwardChatName: { fontSize: 16, fontWeight: '500' }
+  forwardChatName: { fontSize: 16, fontWeight: '500' },
+
+  // Poll styles
+  pollContainer: { minWidth: 200, paddingVertical: 8 },
+  pollQuestion: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
+  pollOptionBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, marginBottom: 8, overflow: 'hidden', position: 'relative', minHeight: 36, justifyContent: 'center' },
+  pollOptionProgress: { position: 'absolute', top: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,136,204,0.3)' },
+  pollOptionContent: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12 },
+  pollOptionText: { fontSize: 14, color: '#000' },
+  pollPercentText: { fontSize: 12, color: '#555' },
+  pollTotalVotes: { fontSize: 11, color: '#888', marginTop: 4, textAlign: 'right' }
 });
