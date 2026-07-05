@@ -1,7 +1,11 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const useUserStore = create((set) => ({
-  user: {
+export const useUserStore = create(
+  persist(
+    (set) => ({
+      user: {
     id: null,
     name: '',
     email: '',
@@ -251,4 +255,10 @@ export const useUserStore = create((set) => ({
     settings: { theme: 'light', wallpaper: null },
     chats: {}
   }),
-}));
+    }),
+    {
+      name: 'telegram-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);

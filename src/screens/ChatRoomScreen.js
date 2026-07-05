@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Audio, Video } from 'expo-av';
 import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { TimezoneSelector } from '../components/settings/TimezoneSelector';
 import { TimezoneBadge } from '../components/chat/TimezoneBadge';
 import { ReminderCard } from '../components/chat/ReminderCard';
@@ -29,6 +30,7 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordMode, setRecordMode] = useState('audio'); // 'audio' or 'video'
   const cameraRef = useRef(null);
+  const swipeableRefs = useRef({});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
 
@@ -321,12 +323,30 @@ export default function ChatRoomScreen({ route, navigation }) {
     
     return (
       <View style={{ marginBottom: 16 }}>
-        <TouchableOpacity 
-          activeOpacity={0.8}
-          onLongPress={() => setSelectedMessage(msg)}
-          delayLongPress={300}
-          style={[styles.bubble, isThem ? (isDark ? styles.bubbleThemDark : styles.bubbleThem) : styles.bubbleMe]}
+        <Swipeable
+          ref={ref => {
+            if (ref) {
+              swipeableRefs.current[msg.id] = ref;
+            }
+          }}
+          renderRightActions={() => (
+            <View style={{ justifyContent: 'center', alignItems: 'flex-start', width: 60, paddingLeft: 10 }}>
+              <View style={{backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 20, width: 40, height: 40, justifyContent: 'center', alignItems: 'center'}}>
+                <Text style={{ fontSize: 18 }}>↩️</Text>
+              </View>
+            </View>
+          )}
+          onSwipeableOpen={() => {
+            setReplyingTo({ id: msg.id, text: msg.text || 'Media', sender: msg.sender });
+            swipeableRefs.current[msg.id]?.close();
+          }}
         >
+          <TouchableOpacity 
+            activeOpacity={1}
+            onLongPress={() => setSelectedMessage(msg)}
+            delayLongPress={300}
+            style={[styles.bubble, isThem ? (isDark ? styles.bubbleThemDark : styles.bubbleThem) : styles.bubbleMe]}
+          >
           {msg.replyToText && (
             <View style={[styles.replyBoxInBubble, isThem ? (isDark ? styles.replyBoxThemDark : styles.replyBoxThem) : styles.replyBoxMe]}>
               <Text style={[styles.replySenderInBubble, isThem ? styles.replySenderThem : styles.replySenderMe]}>
@@ -457,6 +477,7 @@ export default function ChatRoomScreen({ route, navigation }) {
             </View>
           )}
         </TouchableOpacity>
+        </Swipeable>
         
         {isThem && detectReminderIntent(msg.text) && (
           <ReminderCard 
