@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ImageBackground, Modal, Alert, Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 import { TimezoneSelector } from '../components/settings/TimezoneSelector';
 import { TimezoneBadge } from '../components/chat/TimezoneBadge';
 import { ReminderCard } from '../components/chat/ReminderCard';
@@ -34,6 +35,16 @@ export default function ChatRoomScreen({ route, navigation }) {
 
   // Forward (Yo'naltirish) holati
   const [isForwarding, setIsForwarding] = useState(false);
+
+  // Ovozli xabar holati
+  const [recording, setRecording] = useState();
+  const [sound, setSound] = useState();
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+
+  // Soundni tozalash
+  useEffect(() => {
+    return sound ? () => { sound.unloadAsync(); } : undefined;
+  }, [sound]);
 
   const handleSend = () => {
     if (inputText.trim()) {
@@ -123,6 +134,65 @@ export default function ChatRoomScreen({ route, navigation }) {
         reactions: {}
       };
       addMessage(chatId, newMessage);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(recording);
+    } catch (err) {
+      Alert.alert('Xatolik', 'Mikrofonga ruxsat bering');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    setRecording(undefined);
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    
+    if (uri) {
+      const newMessage = { 
+        id: Date.now().toString(), 
+        text: '', 
+        audioUrl: uri,
+        sender: 'me', 
+        time: 'Hozir',
+        reactions: {}
+      };
+      addMessage(chatId, newMessage);
+    }
+  };
+
+  const playSound = async (uri, msgId) => {
+    if (sound) {
+      await sound.unloadAsync();
+      setPlayingAudioId(null);
+    }
+    const { sound: newSound } = await Audio.Sound.createAsync(
+      { uri },
+      { shouldPlay: true }
+    );
+    setSound(newSound);
+    setPlayingAudioId(msgId);
+    
+    newSound.setOnPlaybackStatusUpdate((status) => {
+      if (status.didJustFinish) {
+        setPlayingAudioId(null);
+      }
+    });
+  };
+
+  const stopSound = async () => {
+    if (sound) {
+      await sound.stopAsync();
+      setPlayingAudioId(null);
     }
   };
 
@@ -233,6 +303,26 @@ export default function ChatRoomScreen({ route, navigation }) {
                   <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
                 )}
 
+                {/* Ovozli xabar mavjud bo'lsa */}
+                {msg.audioUrl && (
+                  <View style={styles.audioContainer}>
+                    <TouchableOpacity 
+                      style={[styles.playBtn, isThem && !isDark && {backgroundColor: '#0088CC'}, isThem && isDark && {backgroundColor: '#555'}]} 
+                      onPress={() => playingAudioId === msg.id ? stopSound() : playSound(msg.audioUrl, msg.id)}
+                    >
+                      <Text style={{color: '#FFF', fontSize: 16}}>{playingAudioId === msg.id ? '⏸' : '▶️'}</Text>
+                    </TouchableOpacity>
+                    <View style={styles.audioWaveform}>
+                      <View style={styles.waveLine} />
+                      <View style={[styles.waveLine, {height: 12}]} />
+                      <View style={[styles.waveLine, {height: 8}]} />
+                      <View style={[styles.waveLine, {height: 16}]} />
+                      <View style={styles.waveLine} />
+                    </View>
+                    <Text style={{fontSize: 12, color: isThem ? (isDark ? '#888' : '#888') : '#FFF', marginLeft: 8}}>0:05</Text>
+                  </View>
+                )}
+
                 {msg.text ? <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text> : null}
                 
                 {/* Vaqt va Edit status */}
@@ -315,9 +405,18 @@ export default function ChatRoomScreen({ route, navigation }) {
               onChangeText={setInputText}
               color={isDark ? '#FFF' : '#000'}
             />
-            <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-              <Text style={styles.sendBtnText}>{editingMessage ? 'Saqlash' : 'Jo\'natish'}</Text>
-            </TouchableOpacity>
+            {inputText.trim().length > 0 || editingMessage ? (
+              <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+                <Text style={styles.sendBtnText}>{editingMessage ? 'Saqlash' : 'Jo\'natish'}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={styles.micBtn} 
+                onPress={recording ? stopRecording : startRecording}
+              >
+                <Text style={{fontSize: 20}}>{recording ? '🔴' : '🎙'}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -425,6 +524,11 @@ const styles = StyleSheet.create({
   inputDark: { backgroundColor: '#2C2C2E' },
   sendBtn: { marginLeft: 12, padding: 10 },
   sendBtnText: { color: '#0088CC', fontWeight: '600', fontSize: 16 },
+  micBtn: { marginLeft: 8, padding: 10, justifyContent: 'center', alignItems: 'center' },
+  audioContainer: { flexDirection: 'row', alignItems: 'center', width: 200, paddingVertical: 4 },
+  playBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  audioWaveform: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  waveLine: { width: 3, height: 4, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 2 },
   replyBar: { flexDirection: 'row', padding: 12, backgroundColor: '#F7F7F8', borderTopWidth: 1, borderTopColor: '#E5E5EA', borderLeftWidth: 3, borderLeftColor: '#0088CC' },
   replyBarDark: { backgroundColor: '#1C1C1E', borderTopColor: '#38383A' },
   replyBarContent: { flex: 1 },
