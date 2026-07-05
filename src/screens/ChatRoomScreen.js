@@ -11,7 +11,7 @@ import { useUserStore } from '../store/useUserStore';
 
 export default function ChatRoomScreen({ route, navigation }) {
   const { chatId, chatName } = route.params;
-  const { user, settings, chats, addMessage, deleteMessage, editMessage, addReaction, setWallpaper } = useUserStore();
+  const { user, settings, chats, addMessage, deleteMessage, editMessage, addReaction, setWallpaper, translateMessage } = useUserStore();
   const isDark = settings.theme === 'dark';
   
   const currentChat = chats[chatId] || { messages: [] };
@@ -92,6 +92,9 @@ export default function ChatRoomScreen({ route, navigation }) {
         break;
       case 'forward':
         setIsForwarding(true);
+        break;
+      case 'translate':
+        translateMessage(chatId, selectedMessage.id);
         break;
     }
     if (action !== 'forward') {
@@ -325,6 +328,15 @@ export default function ChatRoomScreen({ route, navigation }) {
 
                 {msg.text ? <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text> : null}
                 
+                {/* Tarjima qilingan matn */}
+                {msg.translatedText && (
+                  <View style={{marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(150,150,150,0.3)'}}>
+                    <Text style={[isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe, {fontStyle: 'italic', fontSize: 14}]}>
+                      {msg.translatedText}
+                    </Text>
+                  </View>
+                )}
+                
                 {/* Vaqt va Edit status */}
                 <View style={styles.timeRow}>
                   {msg.isEdited && <Text style={[styles.editedText, isThem ? null : {color: '#E0E0E0'}]}>edited </Text>}
@@ -434,6 +446,11 @@ export default function ChatRoomScreen({ route, navigation }) {
             <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('forward')}>
               <Text style={styles.actionBtnText}>Yo'naltirish (Forward)</Text>
             </TouchableOpacity>
+            {selectedMessage?.text && (
+              <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('translate')}>
+                <Text style={styles.actionBtnText}>Tarjima qilish</Text>
+              </TouchableOpacity>
+            )}
             {selectedMessage?.sender === 'me' && (
               <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('edit')}>
                 <Text style={styles.actionBtnText}>Tahrirlash</Text>

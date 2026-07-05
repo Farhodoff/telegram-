@@ -109,6 +109,27 @@ export const useUserStore = create((set) => ({
     };
   }),
 
+  // Xabarni tarjima qilish (Mock)
+  translateMessage: (chatId, messageId) => set((state) => {
+    const chat = state.chats[chatId];
+    if (!chat) return state;
+    return {
+      chats: {
+        ...state.chats,
+        [chatId]: {
+          ...chat,
+          messages: chat.messages.map(msg => {
+            if (msg.id === messageId && msg.text) {
+              // Oddiy mock tarjima
+              return { ...msg, translatedText: 'O\'zbekcha: ' + msg.text };
+            }
+            return msg;
+          })
+        }
+      }
+    };
+  }),
+
   // Emojini qo'shish (reaksiya)
   addReaction: (chatId, messageId, reactionEmoji) => set((state) => {
     const chat = state.chats[chatId];
