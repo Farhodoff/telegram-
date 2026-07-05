@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ImageBackground, Modal, Alert, Image } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ImageBackground, Modal, Alert, Image, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
+import * as Location from 'expo-location';
 import { TimezoneSelector } from '../components/settings/TimezoneSelector';
 import { TimezoneBadge } from '../components/chat/TimezoneBadge';
 import { ReminderCard } from '../components/chat/ReminderCard';
@@ -146,6 +147,32 @@ export default function ChatRoomScreen({ route, navigation }) {
         reactions: {}
       };
       addMessage(chatId, newMessage);
+    }
+  };
+
+  const sendLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Xatolik', 'Joylashuvga ruxsat berilmadi');
+      return;
+    }
+
+    try {
+      let location = await Location.getCurrentPositionAsync({});
+      const newMessage = {
+        id: Date.now().toString(),
+        text: '',
+        location: {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        },
+        sender: 'me',
+        time: 'Hozir',
+        reactions: {}
+      };
+      addMessage(chatId, newMessage);
+    } catch (e) {
+      Alert.alert('Xatolik', 'Joylashuvni aniqlab bo\'lmadi');
     }
   };
 
@@ -351,6 +378,17 @@ export default function ChatRoomScreen({ route, navigation }) {
                     <Text style={{color: isThem ? (isDark ? '#FFF' : '#0088CC') : '#FFF', fontWeight: 'bold'}}>
                       {msg.isViewed ? 'Ochilgan' : '1 marta ko\'rish'}
                     </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Joylashuv (Location) mavjud bo'lsa */}
+                {msg.location && (
+                  <TouchableOpacity 
+                    style={styles.locationContainer}
+                    onPress={() => Linking.openURL(`https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}`)}
+                  >
+                    <Text style={{fontSize: 30, textAlign: 'center'}}>📍</Text>
+                    <Text style={{color: isThem ? (isDark ? '#888' : '#0088CC') : '#FFF', marginTop: 4, fontWeight: 'bold'}}>Xaritada ochish</Text>
                   </TouchableOpacity>
                 )}
 
@@ -586,6 +624,9 @@ export default function ChatRoomScreen({ route, navigation }) {
             <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(true); }}>
               <Text style={styles.actionBtnText}>💣 1 marta ko'riladigan rasm</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); sendLocation(); }}>
+              <Text style={styles.actionBtnText}>📍 Joylashuv yuborish</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); setIsCreatePollOpen(true); }}>
               <Text style={styles.actionBtnText}>📊 So'rovnoma yaratish</Text>
             </TouchableOpacity>
@@ -762,5 +803,8 @@ const styles = StyleSheet.create({
   // View once
   viewOnceBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 12 },
   fullScreenImageOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  closeImageBtn: { position: 'absolute', bottom: 50, padding: 16, backgroundColor: 'rgba(255,0,0,0.8)', borderRadius: 24 }
+  closeImageBtn: { position: 'absolute', bottom: 50, padding: 16, backgroundColor: 'rgba(255,0,0,0.8)', borderRadius: 24 },
+
+  // Location
+  locationContainer: { padding: 16, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
 });
