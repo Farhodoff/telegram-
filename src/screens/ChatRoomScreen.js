@@ -48,6 +48,7 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [viewOnceImage, setViewOnceImage] = useState(null); // {id, uri} yoki null
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
 
   // Soundni tozalash
   useEffect(() => {
@@ -174,6 +175,26 @@ export default function ChatRoomScreen({ route, navigation }) {
     } catch (e) {
       Alert.alert('Xatolik', 'Joylashuvni aniqlab bo\'lmadi');
     }
+  };
+
+  const handleSchedule = (seconds) => {
+    const textToSchedule = inputText.trim();
+    if (!textToSchedule) return;
+    
+    setIsScheduleOpen(false);
+    setInputText('');
+    Alert.alert('Rejalashtirildi', `Xabaringiz ${seconds} soniyadan so'ng yuboriladi.`);
+    
+    setTimeout(() => {
+      const newMessage = { 
+        id: Date.now().toString(), 
+        text: textToSchedule, 
+        sender: 'me', 
+        time: 'Hozir',
+        reactions: {}
+      };
+      addMessage(chatId, newMessage);
+    }, seconds * 1000);
   };
 
   const handleCreatePoll = () => {
@@ -530,7 +551,11 @@ export default function ChatRoomScreen({ route, navigation }) {
               color={isDark ? '#FFF' : '#000'}
             />
             {inputText.trim().length > 0 || editingMessage ? (
-              <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+              <TouchableOpacity 
+                style={styles.sendBtn} 
+                onPress={handleSend}
+                onLongPress={() => !editingMessage && setIsScheduleOpen(true)}
+              >
                 <Text style={styles.sendBtnText}>{editingMessage ? 'Saqlash' : 'Jo\'natish'}</Text>
               </TouchableOpacity>
             ) : (
@@ -704,6 +729,20 @@ export default function ChatRoomScreen({ route, navigation }) {
             </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      {/* Schedule Message Modal */}
+      <Modal transparent visible={isScheduleOpen} animationType="slide">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsScheduleOpen(false)}>
+          <View style={[styles.actionSheet, isDark && styles.actionSheetDark, { marginBottom: 80, alignSelf: 'center' }]}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => handleSchedule(10)}>
+              <Text style={styles.actionBtnText}>⏱ 10 soniyadan so'ng jo'natish</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => handleSchedule(60)}>
+              <Text style={styles.actionBtnText}>⏱ 1 daqiqadan so'ng jo'natish</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
     </SafeAreaView>
