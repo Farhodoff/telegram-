@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Platform, Modal, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Platform, Modal, ScrollView, Alert, Image, Switch } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Contacts from 'expo-contacts';
+import * as ImagePicker from 'expo-image-picker';
 import { useUserStore } from '../store/useUserStore';
 
 export default function ChatListScreen({ navigation }) {
-  const { chats, settings, toggleTheme, restoreChats, createNewChat } = useUserStore();
+  const { chats, settings, toggleTheme, toggleBiometric, restoreChats, createNewChat, stories, addStory } = useUserStore();
   const isDark = settings.theme === 'dark';
   
   // Tablar uchun holat
@@ -17,6 +18,7 @@ export default function ChatListScreen({ navigation }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isContactsOpen, setIsContactsOpen] = useState(false);
   const [contactsList, setContactsList] = useState([]);
+  const [activeStory, setActiveStory] = useState(null);
 
   const chatArray = Object.values(chats).filter(chat => {
     if (activeTab === 'All') return true;
@@ -102,6 +104,37 @@ export default function ChatListScreen({ navigation }) {
     navigation.navigate('ChatRoom', { chatId: contactId, chatName: contactName });
   };
 
+  const handleAddStory = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.5,
+    });
+    if (!result.canceled) {
+      addStory(result.assets[0].uri);
+    }
+  };
+
+  const renderStoryItem = ({ item, index }) => {
+    if (index === 0) {
+      return (
+        <View style={{alignItems: 'center', marginRight: 12}}>
+          <TouchableOpacity style={styles.storyAddBtn} onPress={handleAddStory}>
+            <Text style={{fontSize: 24, color: '#0088CC'}}>+</Text>
+          </TouchableOpacity>
+          <Text style={[styles.storyName, isDark && styles.textDark]}>Mening</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={{alignItems: 'center', marginRight: 12}}>
+        <TouchableOpacity style={styles.storyItem} onPress={() => setActiveStory(item)}>
+          <Image source={{uri: item.uri}} style={styles.storyImage} />
+        </TouchableOpacity>
+        <Text style={[styles.storyName, isDark && styles.textDark]}>Stori</Text>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
       {/* Custom Header for ChatList */}
@@ -134,6 +167,18 @@ export default function ChatListScreen({ navigation }) {
         ))}
       </View>
 
+      {/* Stories */}
+      <View style={{paddingVertical: 8}}>
+        <FlatList
+          data={[{ id: 'add' }, ...stories]}
+          keyExtractor={item => item.id}
+          renderItem={renderStoryItem}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16 }}
+        />
+      </View>
+
       <FlatList
         data={chatArray}
         keyExtractor={item => item.id}
@@ -154,6 +199,10 @@ export default function ChatListScreen({ navigation }) {
               <TouchableOpacity onPress={() => setIsSettingsOpen(false)}>
                 <Text style={{fontSize: 18, color: isDark ? '#FFF' : '#000'}}>✕</Text>
               </TouchableOpacity>
+            </View>
+            <View style={[styles.actionBtn, {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}]}>
+              <Text style={styles.actionBtnText}>🔐 Biometrik Qulf (Face ID / Touch ID)</Text>
+              <Switch value={settings.biometricEnabled} onValueChange={toggleBiometric} />
             </View>
             <TouchableOpacity style={styles.actionBtn} onPress={exportData}>
               <Text style={styles.actionBtnText}>💾 Chatlarni zaxiralash (Backup)</Text>
@@ -189,6 +238,18 @@ export default function ChatListScreen({ navigation }) {
               )}
             />
           </View>
+        </View>
+      </Modal>
+
+      {/* Story View Modal */}
+      <Modal visible={!!activeStory} transparent animationType="fade">
+        <View style={styles.fullScreenStory}>
+          {activeStory && (
+            <Image source={{uri: activeStory.uri}} style={{width: '100%', height: '100%'}} resizeMode="contain" />
+          )}
+          <TouchableOpacity style={styles.closeStoryBtn} onPress={() => setActiveStory(null)}>
+            <Text style={{color: '#FFF', fontSize: 16, fontWeight: 'bold'}}>Yopish</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
 
@@ -322,5 +383,13 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   actionBtn: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E5EA' },
   actionBtnText: { fontSize: 16, color: '#0088CC', fontWeight: '500' },
-  contactItem: { flexDirection: 'row', padding: 12, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F2F2F7' }
+  contactItem: { flexDirection: 'row', padding: 12, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
+
+  // Stories
+  storyAddBtn: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: '#0088CC', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
+  storyItem: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: '#0088CC', overflow: 'hidden' },
+  storyImage: { width: '100%', height: '100%' },
+  storyName: { fontSize: 11, textAlign: 'center', marginTop: 4 },
+  fullScreenStory: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  closeStoryBtn: { position: 'absolute', top: 50, right: 20, padding: 10, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 }
 });

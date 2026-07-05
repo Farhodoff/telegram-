@@ -22,6 +22,7 @@ export const useUserStore = create((set) => ({
       id: 'chat1',
       name: 'Suhbatdosh',
       folder: 'Ish', // 'All', 'Ish', 'Shaxsiy'
+      wallpaper: null,
       messages: [
         { id: '1', text: 'Salom, yaxshimisiz?', sender: 'them', time: '10:00' },
         { id: '2', text: 'Ertaga soat 15:00 da uchrashamiz', sender: 'them', time: '10:05' }
@@ -31,10 +32,17 @@ export const useUserStore = create((set) => ({
       id: 'saved',
       name: 'Saved Messages',
       folder: 'Saved Msgs',
+      wallpaper: null,
       messages: []
     }
   },
-  
+
+  // Stories (Tarixchalar)
+  stories: [],
+  addStory: (uri) => set((state) => ({
+    stories: [{ id: Date.now().toString(), uri, time: 'Hozir' }, ...state.stories]
+  })),
+
   // Foydalanuvchi ma'lumotlarini yangilash
   setUser: (userData) => set({ user: { ...userData } }),
   
@@ -54,13 +62,33 @@ export const useUserStore = create((set) => ({
     }
   })),
 
-  // Wallpaper o'zgartirish
+  // Biometrik qulfni o'zgartirish
+  toggleBiometric: () => set((state) => ({
+    settings: { ...state.settings, biometricEnabled: !state.settings.biometricEnabled }
+  })),
+
+  // Umumiy App Wallpaper o'zgartirish
   setWallpaper: (imageSource) => set((state) => ({
     settings: {
       ...state.settings,
       wallpaper: imageSource
     }
   })),
+
+  // Chat Wallpaper o'zgartirish
+  setChatWallpaper: (chatId, imageSource) => set((state) => {
+    const chat = state.chats[chatId];
+    if (!chat) return state;
+    return {
+      chats: {
+        ...state.chats,
+        [chatId]: {
+          ...chat,
+          wallpaper: imageSource
+        }
+      }
+    };
+  }),
 
   // Xabar qo'shish
   addMessage: (chatId, message) => set((state) => {
