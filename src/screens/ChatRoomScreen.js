@@ -27,6 +27,10 @@ export default function ChatRoomScreen({ route, navigation }) {
   // Reaction picker holati
   const [reactionMessage, setReactionMessage] = useState(null);
 
+  // Qidiruv holati (3-bosqich)
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const handleSend = () => {
     if (inputText.trim()) {
       if (editingMessage) {
@@ -84,6 +88,13 @@ export default function ChatRoomScreen({ route, navigation }) {
 
   const lastIncomingMessage = messages.filter(m => m.sender === 'them').pop();
 
+  // Qidiruv filtri
+  const displayMessages = messages.filter(msg => 
+    isSearching && searchQuery.trim() !== '' 
+      ? msg.text.toLowerCase().includes(searchQuery.toLowerCase())
+      : true
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -92,18 +103,35 @@ export default function ChatRoomScreen({ route, navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={{padding: 8, marginLeft: -8}}>
             <Text style={[styles.headerTitle, isDark && styles.textDark]}>‹ Ortga</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, isDark && styles.textDark]}>{chatName}</Text>
-          <View style={{width: 60}} /> {/* Spacer */}
-        </View>
-        <View style={styles.headerControls}>
-          <TimezoneSelector />
-          <TouchableOpacity 
-            style={styles.wallpaperBtn} 
-            onPress={() => setWallpaper(settings.wallpaper ? null : 'https://i.pinimg.com/originals/8c/98/99/8c98994518b575bfd8c949e91d20548b.jpg')}
-          >
-            <Text style={styles.wallpaperBtnText}>{settings.wallpaper ? 'Fonni o\'chirish' : 'Fonni o\'zgartirish'}</Text>
+          
+          {isSearching ? (
+            <TextInput
+              style={[styles.searchInput, isDark && styles.searchInputDark]}
+              placeholder="Qidiruv..."
+              placeholderTextColor={isDark ? '#888' : '#C7C7CC'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+          ) : (
+            <Text style={[styles.headerTitle, isDark && styles.textDark]}>{chatName}</Text>
+          )}
+
+          <TouchableOpacity onPress={() => { setIsSearching(!isSearching); setSearchQuery(''); }} style={{padding: 8}}>
+            <Text style={{fontSize: 18, color: isDark ? '#FFF' : '#000'}}>{isSearching ? '✕' : '🔍'}</Text>
           </TouchableOpacity>
         </View>
+        {!isSearching && (
+          <View style={styles.headerControls}>
+            <TimezoneSelector />
+            <TouchableOpacity 
+              style={styles.wallpaperBtn} 
+              onPress={() => setWallpaper(settings.wallpaper ? null : 'https://i.pinimg.com/originals/8c/98/99/8c98994518b575bfd8c949e91d20548b.jpg')}
+            >
+              <Text style={styles.wallpaperBtnText}>{settings.wallpaper ? 'Fonni o\'chirish' : 'Fonni o\'zgartirish'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Chat Area */}
@@ -121,7 +149,7 @@ export default function ChatRoomScreen({ route, navigation }) {
           </View>
         )}
 
-        {messages.map(msg => {
+        {displayMessages.map(msg => {
           const isThem = msg.sender === 'them';
           const hasReactions = msg.reactions && Object.keys(msg.reactions).length > 0;
           
@@ -273,8 +301,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F7F8' },
   header: { padding: 16, paddingTop: Platform.OS === 'android' ? 40 : 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E5EA' },
   headerDark: { backgroundColor: '#1C1C1E', borderBottomColor: '#38383A' },
-  headerTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, justifyContent: 'space-between' },
   headerControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  searchInput: { flex: 1, backgroundColor: '#F2F2F7', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, marginHorizontal: 12, fontSize: 16 },
+  searchInputDark: { backgroundColor: '#2C2C2E', color: '#FFF' },
   wallpaperBtn: { padding: 8, backgroundColor: '#E5E5EA', borderRadius: 8 },
   wallpaperBtnText: { color: '#0088CC', fontWeight: '600', fontSize: 12 },
   textDark: { color: '#FFF' },
