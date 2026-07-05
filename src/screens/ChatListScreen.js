@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Modal, ScrollView, Alert, Image, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Modal, ScrollView, Alert, Image, Animated, RefreshControl, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Moon, Search, Edit2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useUserStore } from '../store/useUserStore';
+import { useChatStore } from '../store/useChatStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { COLORS, getAvatarColor, getInitials } from '../utils/colors';
+import { getRemoteTimeInfo } from '../utils/timezoneHelper';
 
 export default function ChatListScreen({ navigation }) {
-  const { chats, settings, toggleTheme, toggleBiometric, restoreChats, createNewChat, stories, addStory } = useUserStore();
+  const { user, token } = useUserStore();
+  const { chats, fetchChats, restoreChats, createNewChat, stories, addStory } = useChatStore();
+  const { settings, toggleTheme, toggleBiometric } = useSettingsStore();
   const isDark = settings.theme === 'dark';
   
   const [activeTab, setActiveTab] = useState('All');
@@ -17,9 +23,25 @@ export default function ChatListScreen({ navigation }) {
   const [contactsList, setContactsList] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchChats(token);
+    setRefreshing(false);
+  }, [token, fetchChats]);
+
+  React.useEffect(() => {
+    if (token) {
+      fetchChats(token);
+    }
+  }, [token]);
+
   const chatArray = Object.values(chats).filter(chat => {
-    if (activeTab === 'All') return true;
-    return chat.folder === activeTab;
+    const matchesTab = activeTab === 'All' || chat.folder === activeTab;
+    const matchesSearch = chat.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesTab && matchesSearch;
   });
 
   // Avatar komponenti
@@ -46,7 +68,7 @@ export default function ChatListScreen({ navigation }) {
     if (lastMessage) {
       if (lastMessage.isEncrypted && lastMessage.text) {
         try {
-          const { mockDecrypt } = require('../store/useUserStore');
+          const { mockDecrypt } = require('../store/encryption');
           displayLastText = mockDecrypt(lastMessage.text) || 'Xabar';
         } catch (e) {
           displayLastText = '🔒 Shifrlangan xabar';
@@ -85,10 +107,29 @@ export default function ChatListScreen({ navigation }) {
             )}
           </View>
           <View style={styles.chatBottomRow}>
-            <Text numberOfLines={1} style={[styles.lastMessage, isDark && styles.lastMessageDark]}>
-              {lastMessage?.sender === 'me' && <Text style={{color: COLORS.primary}}>Siz: </Text>}
-              {displayLastText}
-            </Text>
+            <View style={{flex: 1, marginRight: 8}}>
+              <Text numberOfLines={1} style={[styles.lastMessage, isDark && styles.lastMessageDark]}>
+                {lastMessage?.sender === 'me' && <Text style={{color: COLORS.primary}}>Siz: </Text>}
+                {displayLastText}
+              </Text>
+              
+              {/* Uxlash rejimi namoyishi (agar contact sleeping bo'lsa) */}
+              {(() => {
+                const timeInfo = getRemoteTimeInfo(item.timezone);
+                if (timeInfo && timeInfo.isSleeping) {
+                  return (
+                    <View style={styles.sleepStatusRow}>
+                      <Moon color={isDark ? '#888' : '#666'} size={12} />
+                      <Text style={[styles.sleepStatusText, isDark && {color: '#888'}]}>
+                        u yerda {timeInfo.timeString}, uxlayapti
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+            </View>
+
             {unreadCount > 0 && (
               <View style={styles.unreadBadge}>
                 <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
@@ -173,10 +214,22 @@ export default function ChatListScreen({ navigation }) {
 
   return (
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
-      {/* Header */}
       <View style={[styles.header, isDark && styles.headerDark]}>
         <Text style={[styles.headerTitle, isDark && styles.textDark]}>Telegram</Text>
-        <View style={{flexDirection: 'row', alignItems: 'center'}} />
+      </View>
+
+      {/* Search Bar */}
+      <View style={[styles.searchContainer, isDark && styles.searchContainerDark]}>
+        <View style={[styles.searchInputWrapper, isDark && styles.searchInputWrapperDark]}>
+          <Search color={isDark ? '#888' : '#C7C7CC'} size={20} style={{marginRight: 8}} />
+          <TextInput 
+            style={[styles.searchInput, isDark && styles.textDark]}
+            placeholder="Qidiruv..."
+            placeholderTextColor={isDark ? '#888' : '#C7C7CC'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
       </View>
 
       {/* Tabs */}
@@ -217,6 +270,9 @@ export default function ChatListScreen({ navigation }) {
         ItemSeparatorComponent={() => (
           <View style={[styles.separator, isDark && styles.separatorDark]} />
         )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+        }
       />
 
       {/* FAB */}
@@ -225,7 +281,7 @@ export default function ChatListScreen({ navigation }) {
           colors={[COLORS.primary, COLORS.primaryDark]}
           style={styles.fabGradient}
         >
-          <Text style={{fontSize: 24, color: '#FFF'}}>✏️</Text>
+          <Edit2 color="#FFF" size={24} />
         </LinearGradient>
       </TouchableOpacity>
 
@@ -289,6 +345,13 @@ const styles = StyleSheet.create({
   headerBtn: { padding: 6, marginLeft: 12 },
   textDark: { color: COLORS.textPrimaryDark },
 
+  // Search
+  searchContainer: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: COLORS.headerLight },
+  searchContainerDark: { backgroundColor: COLORS.headerDark },
+  searchInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.bgLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  searchInputWrapperDark: { backgroundColor: '#1C1C1E' },
+  searchInput: { flex: 1, fontSize: 16 },
+
   // Tabs
   tabContainer: { 
     flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6,
@@ -325,12 +388,14 @@ const styles = StyleSheet.create({
   chatTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   chatName: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary, flex: 1, marginRight: 8 },
   chatBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  lastMessage: { color: COLORS.textSecondary, fontSize: 14, flex: 1, marginRight: 8 },
+  lastMessage: { color: COLORS.textSecondary, fontSize: 14 },
   lastMessageDark: { color: COLORS.textSecondaryDark },
+  sleepStatusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  sleepStatusText: { fontSize: 12, color: '#666', marginLeft: 4 },
   time: { fontSize: 12, color: COLORS.textSecondary },
   timeDark: { color: COLORS.textSecondaryDark },
   unreadBadge: { 
-    backgroundColor: COLORS.primary, minWidth: 20, height: 20, borderRadius: 10,
+    backgroundColor: '#2A90F0', minWidth: 22, height: 22, borderRadius: 11,
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6,
   },
   unreadBadgeText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },

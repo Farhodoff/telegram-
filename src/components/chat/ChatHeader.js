@@ -1,11 +1,15 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Lock, Search, X, Moon } from 'lucide-react-native';
 import { TimezoneSelector } from '../settings/TimezoneSelector';
 import { COLORS, getAvatarColor, getInitials } from '../../utils/colors';
+import { getRemoteTimeInfo } from '../../utils/timezoneHelper';
 
-export function ChatHeader({ isDark, isSearching, setIsSearching, searchQuery, setSearchQuery, chatName, navigation, isTyping }) {
-  const isOnline = true; // Hardcode for now, can be hooked to store later
+export function ChatHeader({ isDark, isSearching, setIsSearching, searchQuery, setSearchQuery, chatId, chatName, navigation, isTyping, timezone }) {
+  const timeInfo = getRemoteTimeInfo(timezone);
+  const isSleeping = timeInfo?.isSleeping;
+  const isOnline = !isSleeping; // Uyquda bo'lmasa, demak online
 
   const AvatarView = ({ name, size = 36 }) => {
     const colors = getAvatarColor(name);
@@ -26,7 +30,7 @@ export function ChatHeader({ isDark, isSearching, setIsSearching, searchQuery, s
     <View style={[styles.header, isDark && styles.headerDark]}>
       <View style={styles.headerTopRow}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={[styles.backIcon, { color: isDark ? '#FFF' : COLORS.primary }]}>‹</Text>
+          <ChevronLeft color={isDark ? '#FFF' : COLORS.primary} size={32} />
           <Text style={[styles.backText, { color: isDark ? '#FFF' : COLORS.primary }]}>Back</Text>
         </TouchableOpacity>
         
@@ -40,25 +44,30 @@ export function ChatHeader({ isDark, isSearching, setIsSearching, searchQuery, s
             autoFocus
           />
         ) : (
-          <View style={styles.titleContainer}>
+          <TouchableOpacity style={styles.titleContainer} onPress={() => navigation.navigate('ContactProfile', { chatId, chatName })}>
             <AvatarView name={chatName} size={36} />
             <View style={styles.titleTextContainer}>
               <Text style={[styles.headerTitle, isDark && styles.textDark]} numberOfLines={1}>{chatName}</Text>
               <View style={styles.statusRow}>
                 {isTyping ? (
                   <Text style={[styles.statusText, {color: COLORS.primary}]}>yozmoqda...</Text>
+                ) : isSleeping ? (
+                  <View style={[styles.sleepPill, isDark && styles.sleepPillDark]}>
+                    <Moon color={isDark ? '#AAA' : '#666'} size={12} style={{marginRight: 4}} />
+                    <Text style={[styles.sleepPillText, isDark && {color: '#AAA'}]}>{timeInfo.timeString} • uxlayapti</Text>
+                  </View>
                 ) : (
                   isOnline && <Text style={[styles.statusText, {color: COLORS.primary}]}>online</Text>
                 )}
-                <Text style={{fontSize: 9, marginLeft: 6}}>🔒</Text>
-                <Text style={{fontSize: 9, color: isDark ? '#4CAF50' : '#2E7D32', marginLeft: 2, fontWeight: 'bold'}}>E2E Encrypted</Text>
+                <Lock color={isDark ? '#4CAF50' : '#2E7D32'} size={10} style={{ marginLeft: 6, marginTop: 2 }} />
+                <Text style={{fontSize: 9, color: isDark ? '#4CAF50' : '#2E7D32', marginLeft: 4, fontWeight: 'bold'}}>E2E Encrypted</Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
 
         <TouchableOpacity onPress={() => { setIsSearching(!isSearching); setSearchQuery(''); }} style={styles.searchBtn}>
-          <Text style={{fontSize: 20, color: isDark ? '#FFF' : COLORS.primary}}>{isSearching ? '✕' : '🔍'}</Text>
+          {isSearching ? <X color={isDark ? '#FFF' : COLORS.primary} size={24} /> : <Search color={isDark ? '#FFF' : COLORS.primary} size={24} />}
         </TouchableOpacity>
       </View>
       {!isSearching && (
@@ -88,8 +97,11 @@ const styles = StyleSheet.create({
   avatarText: { color: '#FFF', fontWeight: 'bold' },
   titleTextContainer: { flex: 1, justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   statusText: { fontSize: 13 },
+  sleepPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0E0E0', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  sleepPillDark: { backgroundColor: '#2C2C2E' },
+  sleepPillText: { fontSize: 12, color: '#666' },
 
   searchBtn: { padding: 8, width: 40, alignItems: 'flex-end' },
 

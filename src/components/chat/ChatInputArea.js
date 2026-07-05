@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
 import { CameraView } from 'expo-camera';
+import Animated, { SlideInDown, SlideOutDown, FadeIn, FadeOut, ZoomIn, ZoomOut } from 'react-native-reanimated';
+import { Paperclip, Mic, Video as VideoIcon, ArrowUp, X, StopCircle } from 'lucide-react-native';
 import { SmartReplySuggestions } from './SmartReplySuggestions';
 import { COLORS } from '../../utils/colors';
 
@@ -16,7 +18,11 @@ export function ChatInputArea({ isDark, logic }) {
       <View style={[styles.inputContainer, isDark && styles.inputContainerDark]}>
         
         {replyingTo && (
-          <View style={styles.replyBarWrapper}>
+          <Animated.View 
+            entering={SlideInDown.duration(200)} 
+            exiting={SlideOutDown.duration(200)} 
+            style={styles.replyBarWrapper}
+          >
             <View style={[styles.replyBar, { borderLeftColor: COLORS.primary }]}>
               <View style={styles.replyBarContent}>
                 <Text style={[styles.replyBarTitle, { color: COLORS.primary }]}>
@@ -25,24 +31,28 @@ export function ChatInputArea({ isDark, logic }) {
                 <Text numberOfLines={1} style={[styles.replyBarText, isDark && styles.textDark]}>{replyingTo.text}</Text>
               </View>
               <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyBarClose}>
-                <Text style={styles.replyBarCloseText}>✕</Text>
+                <X color={COLORS.textSecondary} size={20} />
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {editingMessage && (
-          <View style={styles.replyBarWrapper}>
+          <Animated.View 
+            entering={SlideInDown.duration(200)} 
+            exiting={SlideOutDown.duration(200)} 
+            style={styles.replyBarWrapper}
+          >
             <View style={[styles.replyBar, { borderLeftColor: COLORS.primary }]}>
               <View style={styles.replyBarContent}>
                 <Text style={[styles.replyBarTitle, { color: COLORS.primary }]}>Tahrirlash</Text>
                 <Text numberOfLines={1} style={[styles.replyBarText, isDark && styles.textDark]}>{editingMessage.text}</Text>
               </View>
               <TouchableOpacity onPress={() => {setEditingMessage(null); setInputText('');}} style={styles.replyBarClose}>
-                <Text style={styles.replyBarCloseText}>✕</Text>
+                <X color={COLORS.textSecondary} size={20} />
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         )}
 
         <SmartReplySuggestions 
@@ -53,7 +63,7 @@ export function ChatInputArea({ isDark, logic }) {
 
         <View style={styles.inputRow}>
           <TouchableOpacity style={styles.attachBtn} onPress={() => setIsAttachmentOpen(true)}>
-            <Text style={{fontSize: 24, color: COLORS.textSecondary}}>📎</Text>
+            <Paperclip color={COLORS.textSecondary} size={24} style={{ transform: [{ rotate: '45deg' }] }} />
           </TouchableOpacity>
           <TextInput
             style={[styles.input, isDark && styles.inputDark]}
@@ -65,24 +75,32 @@ export function ChatInputArea({ isDark, logic }) {
             color={isDark ? '#FFF' : '#000'}
           />
           {inputText.trim().length > 0 || editingMessage ? (
-            <TouchableOpacity 
-              style={[styles.sendBtn, { backgroundColor: COLORS.primary }]} 
-              onPress={handleSend}
-              onLongPress={() => !editingMessage && setIsScheduleOpen(true)}
-            >
-              <Text style={styles.sendBtnIcon}>↑</Text>
-            </TouchableOpacity>
+            <Animated.View entering={ZoomIn.duration(200)} exiting={ZoomOut.duration(200)}>
+              <TouchableOpacity 
+                style={[styles.sendBtn, { backgroundColor: COLORS.primary }]} 
+                onPress={handleSend}
+                onLongPress={() => !editingMessage && setIsScheduleOpen(true)}
+              >
+                <ArrowUp color="#FFF" size={20} strokeWidth={3} />
+              </TouchableOpacity>
+            </Animated.View>
           ) : (
-            <TouchableOpacity 
-              style={styles.micBtn} 
-              onPress={toggleRecordMode}
-              onPressIn={startRecording}
-              onPressOut={stopRecording}
-            >
-              <Text style={{fontSize: 22, color: COLORS.textSecondary}}>
-                {isRecording ? '🛑' : (recordMode === 'audio' ? '🎤' : '📷')}
-              </Text>
-            </TouchableOpacity>
+            <Animated.View entering={ZoomIn.duration(200)} exiting={ZoomOut.duration(200)}>
+              <TouchableOpacity 
+                style={styles.micBtn} 
+                onPress={toggleRecordMode}
+                onPressIn={startRecording}
+                onPressOut={stopRecording}
+              >
+                {isRecording ? (
+                  <StopCircle color="#FF3B30" size={26} />
+                ) : recordMode === 'audio' ? (
+                  <Mic color={COLORS.textSecondary} size={26} />
+                ) : (
+                  <VideoIcon color={COLORS.textSecondary} size={26} />
+                )}
+              </TouchableOpacity>
+            </Animated.View>
           )}
         </View>
       </View>
