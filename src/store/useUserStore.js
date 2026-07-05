@@ -92,6 +92,25 @@ export const useUserStore = create((set) => ({
     };
   }),
 
+  // Chatlarni tiklash (Restore)
+  restoreChats: (backupChats) => set({ chats: backupChats }),
+
+  // Yangi chat yaratish (Kontaktlar orqali)
+  createNewChat: (contactId, contactName) => set((state) => {
+    if (state.chats[contactId]) return state; // Agar oldin yozishilgan bo'lsa
+    return {
+      chats: {
+        ...state.chats,
+        [contactId]: {
+          id: contactId,
+          name: contactName,
+          folder: 'Shaxsiy',
+          messages: []
+        }
+      }
+    };
+  }),
+
   // Xabarni tahrirlash
   editMessage: (chatId, messageId, newText) => set((state) => {
     const chat = state.chats[chatId];
