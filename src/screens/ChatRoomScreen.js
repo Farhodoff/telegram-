@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ImageBackground, Modal, Alert } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TextInput, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ImageBackground, Modal, Alert, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { TimezoneSelector } from '../components/settings/TimezoneSelector';
 import { TimezoneBadge } from '../components/chat/TimezoneBadge';
 import { ReminderCard } from '../components/chat/ReminderCard';
@@ -105,6 +106,26 @@ export default function ChatRoomScreen({ route, navigation }) {
     }
   };
 
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      const newMessage = { 
+        id: Date.now().toString(), 
+        text: '', 
+        imageUrl: result.assets[0].uri,
+        sender: 'me', 
+        time: 'Hozir',
+        reactions: {}
+      };
+      addMessage(chatId, newMessage);
+    }
+  };
+
   const handleReaction = (emoji) => {
     if (reactionMessage) {
       addReaction(chatId, reactionMessage.id, emoji);
@@ -207,6 +228,13 @@ export default function ChatRoomScreen({ route, navigation }) {
                   </Text>
                 )}
 
+                {/* Rasm mavjud bo'lsa */}
+                {msg.imageUrl && (
+                  <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
+                )}
+
+                {msg.text ? <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text> : null}
+                
                 {/* Vaqt va Edit status */}
                 <View style={styles.timeRow}>
                   {msg.isEdited && <Text style={[styles.editedText, isThem ? null : {color: '#E0E0E0'}]}>edited </Text>}
@@ -276,6 +304,9 @@ export default function ChatRoomScreen({ route, navigation }) {
           />
 
           <View style={styles.inputRow}>
+            <TouchableOpacity style={styles.attachBtn} onPress={pickImage}>
+              <Text style={{fontSize: 22}}>📎</Text>
+            </TouchableOpacity>
             <TextInput
               style={[styles.input, isDark && styles.inputDark]}
               placeholder="Xabar yozing..."
@@ -385,9 +416,11 @@ const styles = StyleSheet.create({
   msgTime: { fontSize: 11, color: '#8E8E93' },
   editedText: { fontSize: 11, color: '#8E8E93', fontStyle: 'italic' },
   forwardedText: { fontSize: 12, color: '#8E8E93', fontStyle: 'italic', marginTop: 2 },
+  messageImage: { width: 220, height: 220, borderRadius: 8, marginBottom: 4, backgroundColor: 'rgba(0,0,0,0.1)' },
   inputContainer: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E5E5EA', paddingBottom: Platform.OS === 'ios' ? 0 : 16 },
   inputContainerDark: { backgroundColor: '#1C1C1E', borderTopColor: '#38383A' },
   inputRow: { flexDirection: 'row', padding: 8, alignItems: 'center' },
+  attachBtn: { padding: 8, marginRight: 4 },
   input: { flex: 1, backgroundColor: '#F2F2F7', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, maxHeight: 100 },
   inputDark: { backgroundColor: '#2C2C2E' },
   sendBtn: { marginLeft: 12, padding: 10 },
