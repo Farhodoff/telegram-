@@ -1,7 +1,16 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import CryptoJS from 'crypto-js';
+
+// Oddiy shifrlash simulyatsiyasi (Hex orqali, native crypto xatoliklari oldini olish uchun)
+export const mockEncrypt = (text) => text.split('').map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+export const mockDecrypt = (hex) => {
+  try {
+    let str = '';
+    for (let i = 0; i < hex.length; i += 2) str += String.fromCharCode(parseInt(hex.substring(i, i+2), 16));
+    return decodeURIComponent(escape(str)); // Handle unicode
+  } catch(e) { return hex; }
+};
 
 export const useUserStore = create(
   persist(
@@ -107,12 +116,13 @@ export const useUserStore = create(
     let encryptedMessage = { ...message };
     
     if (encryptedMessage.text) {
-      encryptedMessage.text = CryptoJS.AES.encrypt(encryptedMessage.text, secretKey).toString();
+      // Simulate E2EE
+      encryptedMessage.text = mockEncrypt(unescape(encodeURIComponent(encryptedMessage.text)));
       encryptedMessage.isEncrypted = true;
     }
     
     if (encryptedMessage.replyToText) {
-      encryptedMessage.replyToText = CryptoJS.AES.encrypt(encryptedMessage.replyToText, secretKey).toString();
+      encryptedMessage.replyToText = mockEncrypt(unescape(encodeURIComponent(encryptedMessage.replyToText)));
     }
 
     return {
@@ -166,8 +176,7 @@ export const useUserStore = create(
     const chat = state.chats[chatId];
     if (!chat) return state;
 
-    const secretKey = chat.secretKey || 'fallback_key';
-    const encryptedNewText = CryptoJS.AES.encrypt(newText, secretKey).toString();
+    const encryptedNewText = mockEncrypt(unescape(encodeURIComponent(newText)));
 
     return {
       chats: {
@@ -215,6 +224,32 @@ export const useUserStore = create(
           messages: chat.messages.map(msg => 
             msg.id === messageId ? { ...msg, isViewed: true } : msg
           )
+        }
+      }
+    };
+  }),
+
+  // Chatdagi barcha kiruvchi xabarlarni o'qilgan (isRead: true) qilish
+  markAsRead: (chatId) => set((state) => {
+    const chat = state.chats[chatId];
+    if (!chat) return state;
+    let changed = false;
+    const newMessages = chat.messages.map(msg => {
+      if (msg.sender === 'them' && !msg.isRead) {
+        changed = true;
+        return { ...msg, isRead: true };
+      }
+      return msg;
+    });
+
+    if (!changed) return state;
+
+    return {
+      chats: {
+        ...state.chats,
+        [chatId]: {
+          ...chat,
+          messages: newMessages
         }
       }
     };

@@ -1,22 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Modal, ScrollView, Alert, Image, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Modal, ScrollView, Alert, Image, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as DocumentPicker from 'expo-document-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import CryptoJS from 'crypto-js';
 import { useUserStore } from '../store/useUserStore';
+import { COLORS, getAvatarColor, getInitials } from '../utils/colors';
 
 export default function ChatListScreen({ navigation }) {
   const { chats, settings, toggleTheme, toggleBiometric, restoreChats, createNewChat, stories, addStory } = useUserStore();
   const isDark = settings.theme === 'dark';
   
-  // Tablar uchun holat
-  const [activeTab, setActiveTab] = useState('All'); // 'All', 'Ish', 'Saved Msgs'
+  const [activeTab, setActiveTab] = useState('All');
   const tabs = ['All', 'Ish', 'Saved Msgs'];
   
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isContactsOpen, setIsContactsOpen] = useState(false);
   const [contactsList, setContactsList] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
@@ -26,14 +22,32 @@ export default function ChatListScreen({ navigation }) {
     return chat.folder === activeTab;
   });
 
+  // Avatar komponenti
+  const AvatarView = ({ name, size = 52 }) => {
+    const colors = getAvatarColor(name);
+    const initials = getInitials(name);
+    return (
+      <LinearGradient
+        colors={colors}
+        style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={[styles.avatarText, { fontSize: size * 0.38 }]}>{initials}</Text>
+      </LinearGradient>
+    );
+  };
+
   const renderChatItem = ({ item }) => {
     const lastMessage = item.messages[item.messages.length - 1];
+    const unreadCount = item.messages.filter(m => m.sender === 'them' && !m.isRead).length;
+    
     let displayLastText = 'Xabar yo\'q';
     if (lastMessage) {
       if (lastMessage.isEncrypted && lastMessage.text) {
         try {
-          const secretKey = item.secretKey || 'fallback_key';
-          displayLastText = CryptoJS.AES.decrypt(lastMessage.text, secretKey).toString(CryptoJS.enc.Utf8) || 'Xabar';
+          const { mockDecrypt } = require('../store/useUserStore');
+          displayLastText = mockDecrypt(lastMessage.text) || 'Xabar';
         } catch (e) {
           displayLastText = '🔒 Shifrlangan xabar';
         }
@@ -51,58 +65,39 @@ export default function ChatListScreen({ navigation }) {
         displayLastText = lastMessage.text || 'Xabar';
       }
     }
+
     return (
       <TouchableOpacity 
         style={[styles.chatItem, isDark && styles.chatItemDark]}
         onPress={() => navigation.navigate('ChatRoom', { chatId: item.id, chatName: item.name })}
+        activeOpacity={0.6}
       >
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarText}>{item.name.substring(0,2)}</Text>
+        <View style={styles.avatarWrapper}>
+          <AvatarView name={item.name} size={52} />
+          {/* Online indicator */}
+          <View style={styles.onlineIndicator} />
         </View>
         <View style={styles.chatInfo}>
-          <Text style={[styles.chatName, isDark && styles.textDark]}>{item.name}</Text>
-          <Text numberOfLines={1} style={[styles.lastMessage, isDark && styles.lastMessageDark]}>
-            {displayLastText}
-          </Text>
+          <View style={styles.chatTopRow}>
+            <Text style={[styles.chatName, isDark && styles.textDark]} numberOfLines={1}>{item.name}</Text>
+            {lastMessage && (
+              <Text style={[styles.time, isDark && styles.timeDark]}>{lastMessage.time}</Text>
+            )}
+          </View>
+          <View style={styles.chatBottomRow}>
+            <Text numberOfLines={1} style={[styles.lastMessage, isDark && styles.lastMessageDark]}>
+              {lastMessage?.sender === 'me' && <Text style={{color: COLORS.primary}}>Siz: </Text>}
+              {displayLastText}
+            </Text>
+            {unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+              </View>
+            )}
+          </View>
         </View>
-        {lastMessage && (
-          <Text style={styles.time}>{lastMessage.time}</Text>
-          )}
       </TouchableOpacity>
     );
-  };
-
-  const exportData = async () => {
-    try {
-      const dataStr = JSON.stringify(chats);
-      const fileUri = FileSystem.documentDirectory + 'telegram-backup.json';
-      await FileSystem.writeAsStringAsync(fileUri, dataStr, { encoding: FileSystem.EncodingType.UTF8 });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri);
-      } else {
-        Alert.alert('Xatolik', 'Faylni ulashish imkoni yo\'q');
-      }
-    } catch (error) {
-      Alert.alert('Xatolik', 'Zaxira nusxasini yaratishda xatolik yuz berdi');
-    }
-  };
-
-  const importData = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
-        const parsedData = JSON.parse(fileContent);
-        if (typeof parsedData === 'object' && !Array.isArray(parsedData)) {
-          restoreChats(parsedData);
-          Alert.alert('Muvaffaqiyat', 'Chatlar zaxiradan tiklandi!');
-        } else {
-          Alert.alert('Xatolik', 'Fayl formati noto\'g\'ri');
-        }
-      }
-    } catch (error) {
-      Alert.alert('Xatolik', 'Faylni o\'qishda xatolik yuz berdi');
-    }
   };
 
   const loadContacts = async () => {
@@ -135,7 +130,7 @@ export default function ChatListScreen({ navigation }) {
 
   const handleAddStory = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.5,
     });
     if (!result.canceled) {
@@ -146,40 +141,45 @@ export default function ChatListScreen({ navigation }) {
   const renderStoryItem = ({ item, index }) => {
     if (index === 0) {
       return (
-        <View style={{alignItems: 'center', marginRight: 12}}>
+        <View style={{alignItems: 'center', marginRight: 14}}>
           <TouchableOpacity style={styles.storyAddBtn} onPress={handleAddStory}>
-            <Text style={{fontSize: 24, color: '#0088CC'}}>+</Text>
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              style={styles.storyAddGradient}
+            >
+              <Text style={{fontSize: 22, color: '#FFF', fontWeight: '300'}}>+</Text>
+            </LinearGradient>
           </TouchableOpacity>
-          <Text style={[styles.storyName, isDark && styles.textDark]}>Mening</Text>
+          <Text style={[styles.storyName, isDark && {color: COLORS.textSecondaryDark}]}>Mening</Text>
         </View>
       );
     }
     return (
-      <View style={{alignItems: 'center', marginRight: 12}}>
-        <TouchableOpacity style={styles.storyItem} onPress={() => setActiveStory(item)}>
-          <Image source={{uri: item.uri}} style={styles.storyImage} />
+      <View style={{alignItems: 'center', marginRight: 14}}>
+        <TouchableOpacity onPress={() => setActiveStory(item)}>
+          <LinearGradient
+            colors={[COLORS.primary, '#229ED9']}
+            style={styles.storyRing}
+          >
+            <View style={[styles.storyImageWrapper, isDark && {borderColor: COLORS.bgDark}]}>
+              <Image source={{uri: item.uri}} style={styles.storyImage} />
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
-        <Text style={[styles.storyName, isDark && styles.textDark]}>Stori</Text>
+        <Text style={[styles.storyName, isDark && {color: COLORS.textSecondaryDark}]}>Stori</Text>
       </View>
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
-      {/* Custom Header for ChatList */}
+      {/* Header */}
       <View style={[styles.header, isDark && styles.headerDark]}>
-        <Text style={[styles.headerTitle, isDark && styles.textDark]}>Chatlar</Text>
-        <View style={{flexDirection: 'row'}}>
-          <TouchableOpacity onPress={() => setIsSettingsOpen(true)} style={[styles.themeToggle, {marginRight: 16}]}>
-            <Text style={{fontSize: 20}}>⚙️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
-            <Text style={{fontSize: 20}}>{isDark ? '☀️' : '🌙'}</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.headerTitle, isDark && styles.textDark]}>Telegram</Text>
+        <View style={{flexDirection: 'row', alignItems: 'center'}} />
       </View>
 
-      {/* Tabs / Folders */}
+      {/* Tabs */}
       <View style={[styles.tabContainer, isDark && styles.tabContainerDark]}>
         {tabs.map(tab => (
           <TouchableOpacity 
@@ -197,7 +197,7 @@ export default function ChatListScreen({ navigation }) {
       </View>
 
       {/* Stories */}
-      <View style={{paddingVertical: 8}}>
+      <View style={[styles.storiesContainer, isDark && {borderBottomColor: COLORS.separatorDark}]}>
         <FlatList
           data={[{ id: 'add' }, ...stories]}
           keyExtractor={item => item.id}
@@ -208,47 +208,35 @@ export default function ChatListScreen({ navigation }) {
         />
       </View>
 
+      {/* Chat List */}
       <FlatList
         data={chatArray}
         keyExtractor={item => item.id}
         renderItem={renderChatItem}
-        contentContainerStyle={{ paddingVertical: 8 }}
+        contentContainerStyle={{ paddingBottom: 80 }}
+        ItemSeparatorComponent={() => (
+          <View style={[styles.separator, isDark && styles.separatorDark]} />
+        )}
       />
 
-      <TouchableOpacity style={styles.fab} onPress={loadContacts}>
-        <Text style={{fontSize: 24, color: '#FFF'}}>➕</Text>
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={loadContacts} activeOpacity={0.8}>
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          style={styles.fabGradient}
+        >
+          <Text style={{fontSize: 24, color: '#FFF'}}>✏️</Text>
+        </LinearGradient>
       </TouchableOpacity>
 
-      {/* Settings / Backup Modal */}
-      <Modal visible={isSettingsOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isDark && styles.modalContentDark]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, isDark && styles.textDark]}>Sozlamalar</Text>
-              <TouchableOpacity onPress={() => setIsSettingsOpen(false)}>
-                <Text style={{fontSize: 18, color: isDark ? '#FFF' : '#000'}}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.actionBtn, {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}]}>
-              <Text style={styles.actionBtnText}>🔐 Biometrik Qulf (Face ID / Touch ID)</Text>
-              <Switch value={settings.biometricEnabled} onValueChange={toggleBiometric} />
-            </View>
-            <TouchableOpacity style={styles.actionBtn} onPress={exportData}>
-              <Text style={styles.actionBtnText}>💾 Chatlarni zaxiralash (Backup)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={importData}>
-              <Text style={styles.actionBtnText}>🔄 Zaxirani tiklash (Restore)</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+
 
       {/* Contacts Modal */}
       <Modal visible={isContactsOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, isDark && styles.modalContentDark, {height: '80%'}]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, isDark && styles.textDark]}>Yangi Chat (Kontaktlar)</Text>
+              <Text style={[styles.modalTitle, isDark && styles.textDark]}>Yangi Chat</Text>
               <TouchableOpacity onPress={() => setIsContactsOpen(false)}>
                 <Text style={{fontSize: 18, color: isDark ? '#FFF' : '#000'}}>✕</Text>
               </TouchableOpacity>
@@ -257,11 +245,11 @@ export default function ChatListScreen({ navigation }) {
               data={contactsList}
               keyExtractor={item => item.id}
               renderItem={({item}) => (
-                <TouchableOpacity style={styles.contactItem} onPress={() => startNewChat(item)}>
-                  <View style={styles.avatarPlaceholder}><Text style={styles.avatarText}>{item.name ? item.name.substring(0,2) : '?'}</Text></View>
-                  <View>
+                <TouchableOpacity style={[styles.contactItem, isDark && styles.contactItemDark]} onPress={() => startNewChat(item)}>
+                  <AvatarView name={item.name || '?'} size={44} />
+                  <View style={{marginLeft: 12}}>
                     <Text style={[styles.chatName, isDark && styles.textDark]}>{item.name || 'Ismsiz'}</Text>
-                    <Text style={styles.lastMessage}>{item.phoneNumbers && item.phoneNumbers.length > 0 ? item.phoneNumbers[0].number : 'Raqam yo\'q'}</Text>
+                    <Text style={styles.contactPhone}>{item.phoneNumbers && item.phoneNumbers.length > 0 ? item.phoneNumbers[0].number : 'Raqam yo\'q'}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -281,144 +269,98 @@ export default function ChatListScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFF',
+  container: { flex: 1, backgroundColor: COLORS.bgLight },
+  containerDark: { backgroundColor: COLORS.bgDark },
+  
+  // Header
+  header: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: COLORS.headerLight,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight,
   },
-  containerDark: {
-    backgroundColor: '#000',
+  headerDark: { backgroundColor: COLORS.headerDark, borderBottomColor: COLORS.separatorDark },
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary },
+  headerBtn: { padding: 6, marginLeft: 12 },
+  textDark: { color: COLORS.textPrimaryDark },
+
+  // Tabs
+  tabContainer: { 
+    flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6,
+    backgroundColor: COLORS.headerLight, 
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingTop: Platform.OS === 'android' ? 40 : 16,
-    backgroundColor: '#FFF',
-  },
-  headerDark: {
-    backgroundColor: '#1C1C1E',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  textDark: {
-    color: '#FFF',
-  },
-  themeToggle: {
-    padding: 4,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-    backgroundColor: '#FFF',
-  },
-  tabContainerDark: {
-    backgroundColor: '#1C1C1E',
-    borderBottomColor: '#38383A',
-  },
-  tab: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
-  },
-  tabActive: {
-    backgroundColor: '#0088CC',
-  },
-  tabText: {
-    color: '#8E8E93',
-    fontWeight: '600',
-  },
-  tabTextDark: {
-    color: '#A1A1A6',
-  },
-  tabTextActive: {
-    color: '#FFF',
-  },
-  chatItem: {
-    flexDirection: 'row',
-    padding: 12,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  chatItemDark: {
-    backgroundColor: '#000',
-  },
-  avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#0088CC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  chatInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  chatName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  lastMessage: {
-    color: '#8E8E93',
-    fontSize: 14,
-  },
-  lastMessageDark: {
-    color: '#8E8E93',
-  },
-  time: {
-    fontSize: 12,
-    color: '#8E8E93',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0088CC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 40 },
-  modalContentDark: { backgroundColor: '#1C1C1E' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E5EA' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
-  actionBtn: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E5EA' },
-  actionBtnText: { fontSize: 16, color: '#0088CC', fontWeight: '500' },
-  contactItem: { flexDirection: 'row', padding: 12, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
+  tabContainerDark: { backgroundColor: COLORS.headerDark, borderBottomColor: COLORS.separatorDark },
+  tab: { paddingVertical: 6, paddingHorizontal: 14, marginRight: 8, borderRadius: 16, backgroundColor: '#F0F2F5' },
+  tabActive: { backgroundColor: COLORS.primary },
+  tabText: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 13 },
+  tabTextDark: { color: COLORS.textSecondaryDark },
+  tabTextActive: { color: '#FFF' },
 
   // Stories
-  storyAddBtn: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: '#0088CC', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
-  storyItem: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: '#0088CC', overflow: 'hidden' },
+  storiesContainer: { paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
+  storyAddBtn: { width: 56, height: 56, borderRadius: 28, overflow: 'hidden' },
+  storyAddGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  storyRing: { width: 60, height: 60, borderRadius: 30, padding: 2, justifyContent: 'center', alignItems: 'center' },
+  storyImageWrapper: { width: 54, height: 54, borderRadius: 27, overflow: 'hidden', borderWidth: 2, borderColor: COLORS.bgLight },
   storyImage: { width: '100%', height: '100%' },
-  storyName: { fontSize: 11, textAlign: 'center', marginTop: 4 },
+  storyName: { fontSize: 11, textAlign: 'center', marginTop: 4, color: COLORS.textSecondary },
+
+  // Chat Item
+  chatItem: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', backgroundColor: COLORS.bgLight },
+  chatItemDark: { backgroundColor: COLORS.bgDark },
+  avatarWrapper: { position: 'relative', marginRight: 12 },
+  avatar: { justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: '#FFF', fontWeight: 'bold' },
+  onlineIndicator: { 
+    position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7,
+    backgroundColor: COLORS.online, borderWidth: 2.5, borderColor: COLORS.bgLight 
+  },
+  chatInfo: { flex: 1, justifyContent: 'center' },
+  chatTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  chatName: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary, flex: 1, marginRight: 8 },
+  chatBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  lastMessage: { color: COLORS.textSecondary, fontSize: 14, flex: 1, marginRight: 8 },
+  lastMessageDark: { color: COLORS.textSecondaryDark },
+  time: { fontSize: 12, color: COLORS.textSecondary },
+  timeDark: { color: COLORS.textSecondaryDark },
+  unreadBadge: { 
+    backgroundColor: COLORS.primary, minWidth: 20, height: 20, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6,
+  },
+  unreadBadgeText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+
+  // Separator
+  separator: { height: 0.5, backgroundColor: COLORS.separatorLight, marginLeft: 80 },
+  separatorDark: { backgroundColor: COLORS.separatorDark },
+
+  // FAB
+  fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, overflow: 'hidden', elevation: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8 },
+  fabGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Modals
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40 },
+  modalContentDark: { backgroundColor: COLORS.headerDark },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
+  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+
+  // Settings
+  settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
+  settingItemDark: { borderBottomColor: COLORS.separatorDark },
+  settingText: { fontSize: 16, color: COLORS.textPrimary },
+
+  // Contacts
+  contactItem: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingHorizontal: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
+  contactItemDark: { borderBottomColor: COLORS.separatorDark },
+  contactPhone: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+
+  // Story View
   fullScreenStory: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  closeStoryBtn: { position: 'absolute', top: 50, right: 20, padding: 10, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 }
+  closeStoryBtn: { position: 'absolute', top: 50, right: 20, padding: 10, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
 });

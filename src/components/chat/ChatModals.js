@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Modal, Image } from 'react-native';
+import { View, Text, TouchableOpacity, TouchableWithoutFeedback, ScrollView, TextInput, StyleSheet, Modal, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { COLORS } from '../../utils/colors';
 
 export function ChatModals({ isDark, logic }) {
   const {
@@ -23,43 +25,47 @@ export function ChatModals({ isDark, logic }) {
       {/* Action Sheet Modal */}
       <Modal transparent visible={!!selectedMessage} animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedMessage(null)}>
-          <View style={[styles.actionSheet, isDark && styles.actionSheetDark]}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('react')}>
-              <Text style={styles.actionBtnText}>Reaksiya qo'shish ❤️👍</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('reply')}>
-              <Text style={styles.actionBtnText}>Javob berish</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('forward')}>
-              <Text style={styles.actionBtnText}>Yo'naltirish (Forward)</Text>
-            </TouchableOpacity>
-            {selectedMessage?.text && (
-              <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('translate')}>
-                <Text style={styles.actionBtnText}>Tarjima qilish</Text>
+          <TouchableWithoutFeedback>
+            <View style={[styles.actionSheet, isDark && styles.actionSheetDark]}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('react')}>
+                <Text style={styles.actionBtnText}>Reaksiya qo'shish ❤️👍</Text>
               </TouchableOpacity>
-            )}
-            {selectedMessage?.sender === 'me' && (
-              <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('edit')}>
-                <Text style={styles.actionBtnText}>Tahrirlash</Text>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('reply')}>
+                <Text style={styles.actionBtnText}>Javob berish</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('delete')}>
-              <Text style={[styles.actionBtnText, {color: '#FF3B30'}]}>O'chirish</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('forward')}>
+                <Text style={styles.actionBtnText}>Yo'naltirish (Forward)</Text>
+              </TouchableOpacity>
+              {selectedMessage?.text && (
+                <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('translate')}>
+                  <Text style={styles.actionBtnText}>Tarjima qilish</Text>
+                </TouchableOpacity>
+              )}
+              {selectedMessage?.sender === 'me' && (
+                <TouchableOpacity style={styles.actionBtn} onPress={() => handleAction('edit')}>
+                  <Text style={styles.actionBtnText}>Tahrirlash</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[styles.actionBtn, { borderBottomWidth: 0 }]} onPress={() => handleAction('delete')}>
+                <Text style={[styles.actionBtnText, {color: COLORS.danger}]}>O'chirish</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
 
       {/* Emoji Reaction Modal */}
       <Modal transparent visible={!!reactionMessage} animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setReactionMessage(null)}>
-          <View style={[styles.emojiSheet, isDark && styles.actionSheetDark]}>
-            {['❤️', '👍', '😂', '🔥', '🎉'].map(emoji => (
-              <TouchableOpacity key={emoji} onPress={() => handleReaction(emoji)} style={styles.emojiBtn}>
-                <Text style={styles.emojiText}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableWithoutFeedback>
+            <View style={[styles.emojiSheet, isDark && styles.actionSheetDark]}>
+              {['❤️', '👍', '😂', '🔥', '🎉'].map(emoji => (
+                <TouchableOpacity key={emoji} onPress={() => handleReaction(emoji)} style={styles.emojiBtn}>
+                  <Text style={styles.emojiText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
 
@@ -92,23 +98,25 @@ export function ChatModals({ isDark, logic }) {
       {/* Attachment Modal */}
       <Modal transparent visible={isAttachmentOpen} animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsAttachmentOpen(false)}>
-          <View style={[styles.actionSheet, isDark && styles.actionSheetDark, { marginBottom: 80, alignSelf: 'center' }]}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(false); }}>
-              <Text style={styles.actionBtnText}>🖼 Rasm yuborish</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(true); }}>
-              <Text style={styles.actionBtnText}>💣 1 marta ko'riladigan rasm</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); sendLocation(); }}>
-              <Text style={styles.actionBtnText}>📍 Joylashuv yuborish</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); setIsCreatePollOpen(true); }}>
-              <Text style={styles.actionBtnText}>📊 So'rovnoma yaratish</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickWallpaper(); }}>
-              <Text style={styles.actionBtnText}>🖼 Fon rasmini o'zgartirish</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableWithoutFeedback>
+            <View style={[styles.actionSheet, isDark && styles.actionSheetDark, { marginBottom: 80, alignSelf: 'center', width: '90%' }]}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(false); }}>
+                <Text style={styles.actionBtnText}>🖼 Rasm yuborish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(true); }}>
+                <Text style={styles.actionBtnText}>💣 1 marta ko'riladigan rasm</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); sendLocation(); }}>
+                <Text style={styles.actionBtnText}>📍 Joylashuv yuborish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); setIsCreatePollOpen(true); }}>
+                <Text style={styles.actionBtnText}>📊 So'rovnoma yaratish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, { borderBottomWidth: 0 }]} onPress={() => { setIsAttachmentOpen(false); pickWallpaper(); }}>
+                <Text style={styles.actionBtnText}>🖼 Fon rasmini o'zgartirish</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
 
@@ -143,23 +151,23 @@ export function ChatModals({ isDark, logic }) {
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{padding: 16}}>
-              <Text style={{color: isDark ? '#888' : '#888', marginBottom: 8}}>Savol</Text>
+              <Text style={{color: isDark ? COLORS.textSecondaryDark : COLORS.textSecondary, marginBottom: 8}}>Savol</Text>
               <TextInput 
                 style={[styles.input, isDark && styles.inputDark, {marginBottom: 24}]} 
                 placeholder="Savol bering..." 
-                placeholderTextColor="#888" 
+                placeholderTextColor={isDark ? COLORS.textSecondaryDark : COLORS.textSecondary} 
                 value={pollQuestion} 
                 onChangeText={setPollQuestion}
                 color={isDark ? '#FFF' : '#000'}
               />
               
-              <Text style={{color: isDark ? '#888' : '#888', marginBottom: 8}}>Variantlar</Text>
+              <Text style={{color: isDark ? COLORS.textSecondaryDark : COLORS.textSecondary, marginBottom: 8}}>Variantlar</Text>
               {pollOptions.map((opt, i) => (
                 <TextInput 
                   key={i}
                   style={[styles.input, isDark && styles.inputDark, {marginBottom: 12}]} 
                   placeholder={`Variant ${i+1}`} 
-                  placeholderTextColor="#888" 
+                  placeholderTextColor={isDark ? COLORS.textSecondaryDark : COLORS.textSecondary} 
                   value={opt} 
                   onChangeText={(text) => {
                     const newOpts = [...pollOptions];
@@ -173,10 +181,10 @@ export function ChatModals({ isDark, logic }) {
                 style={{padding: 12, alignItems: 'center'}} 
                 onPress={() => setPollOptions([...pollOptions, ''])}
               >
-                <Text style={{color: '#0088CC'}}>+ Variant qo'shish</Text>
+                <Text style={{color: COLORS.primary}}>+ Variant qo'shish</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.sendBtn, {backgroundColor: '#0088CC', borderRadius: 8, marginTop: 24}]} onPress={handleCreatePoll}>
+              <TouchableOpacity style={[styles.sendBtn, {backgroundColor: COLORS.primary}]} onPress={handleCreatePoll}>
                 <Text style={{color: '#FFF', textAlign: 'center', fontSize: 16, fontWeight: 'bold'}}>Yaratish</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -187,14 +195,16 @@ export function ChatModals({ isDark, logic }) {
       {/* Schedule Message Modal */}
       <Modal transparent visible={isScheduleOpen} animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsScheduleOpen(false)}>
-          <View style={[styles.actionSheet, isDark && styles.actionSheetDark, { marginBottom: 80, alignSelf: 'center' }]}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleSchedule(10)}>
-              <Text style={styles.actionBtnText}>⏱ 10 soniyadan so'ng jo'natish</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleSchedule(60)}>
-              <Text style={styles.actionBtnText}>⏱ 1 daqiqadan so'ng jo'natish</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableWithoutFeedback>
+            <View style={[styles.actionSheet, isDark && styles.actionSheetDark, { marginBottom: 80, alignSelf: 'center', width: '80%' }]}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => handleSchedule(10)}>
+                <Text style={styles.actionBtnText}>⏱ 10 soniyadan so'ng jo'natish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, { borderBottomWidth: 0 }]} onPress={() => handleSchedule(60)}>
+                <Text style={styles.actionBtnText}>⏱ 1 daqiqadan so'ng jo'natish</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
     </>
@@ -202,27 +212,31 @@ export function ChatModals({ isDark, logic }) {
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  actionSheet: { backgroundColor: '#FFF', margin: 16, borderRadius: 16, overflow: 'hidden' },
-  actionSheetDark: { backgroundColor: '#2C2C2E' },
-  actionBtn: { padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(150,150,150,0.2)', alignItems: 'center' },
-  actionBtnText: { fontSize: 18, color: '#0088CC' },
-  emojiSheet: { backgroundColor: '#FFF', margin: 16, borderRadius: 30, padding: 16, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', alignSelf: 'center', marginTop: '50%' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  actionSheet: { backgroundColor: COLORS.bgLight, margin: 16, borderRadius: 14, overflow: 'hidden' },
+  actionSheetDark: { backgroundColor: COLORS.headerDark },
+  actionBtn: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight, alignItems: 'center' },
+  actionBtnText: { fontSize: 18, color: COLORS.primary },
+  
+  emojiSheet: { backgroundColor: COLORS.bgLight, margin: 16, borderRadius: 30, padding: 16, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', alignSelf: 'center', marginTop: '50%' },
   emojiBtn: { padding: 10 },
   emojiText: { fontSize: 32 },
+  
   forwardModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  forwardModalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, height: '60%' },
-  forwardModalContentDark: { backgroundColor: '#1C1C1E' },
-  forwardModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(150,150,150,0.2)' },
+  forwardModalContent: { backgroundColor: COLORS.bgLight, borderTopLeftRadius: 16, borderTopRightRadius: 16, height: '60%' },
+  forwardModalContentDark: { backgroundColor: COLORS.bgDark },
+  forwardModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
   forwardModalTitle: { fontSize: 18, fontWeight: 'bold' },
-  forwardChatItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(150,150,150,0.1)' },
-  forwardChatItemDark: { borderBottomColor: 'rgba(255,255,255,0.1)' },
-  forwardAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#0088CC', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  forwardChatItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
+  forwardChatItemDark: { borderBottomColor: COLORS.separatorDark },
+  forwardAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   forwardChatName: { fontSize: 18, fontWeight: '500' },
+  
   fullScreenImageOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  closeImageBtn: { position: 'absolute', bottom: 50, backgroundColor: '#FF3B30', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
-  textDark: { color: '#FFF' },
-  input: { backgroundColor: '#F2F2F7', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
-  inputDark: { backgroundColor: '#2C2C2E', color: '#FFF' },
-  sendBtn: { padding: 16, alignItems: 'center' }
+  closeImageBtn: { position: 'absolute', bottom: 50, backgroundColor: COLORS.danger, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
+  
+  textDark: { color: COLORS.textPrimaryDark },
+  input: { backgroundColor: COLORS.inputBgLight, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
+  inputDark: { backgroundColor: COLORS.inputBgDark, color: '#FFF' },
+  sendBtn: { padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 24 }
 });
