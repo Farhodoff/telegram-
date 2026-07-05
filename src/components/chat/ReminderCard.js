@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Calendar from 'expo-calendar';
+import { CalendarPlus, X } from 'lucide-react-native';
 
 /**
  * Chat xabari ostida chiqadigan "Eslatma qo'shish" kartasi
@@ -81,13 +82,12 @@ export const ReminderCard = ({ isDarkMode = false, messageText = '', onDismiss }
   return (
     <View style={[styles.card, containerBg]}>
       <TouchableOpacity style={styles.content} onPress={handleAddReminderClick}>
-        {/* Kalendar ikonkasi (Emoji yoki rasm qo'yish mumkin, hozir emoji) */}
-        <Text style={styles.icon}>📅</Text>
+        <CalendarPlus color={isDarkMode ? '#FFD54F' : '#D97706'} size={18} style={styles.icon} />
         <Text style={[styles.text, textColor]}>Eslatma qo'shish?</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss}>
-        <Text style={styles.dismissText}>✕</Text>
+        <X color={isDarkMode ? 'rgba(255,213,79,0.7)' : 'rgba(217,119,6,0.7)'} size={18} />
       </TouchableOpacity>
 
       {showPicker && (
@@ -122,10 +122,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   bgLight: {
-    backgroundColor: '#FFF8E1', // soft cream
+    backgroundColor: '#FEF3C7', // soft amber
   },
   bgDark: {
-    backgroundColor: '#4A401D', // muted dark-yellow
+    backgroundColor: '#4A3000', // deep brown/amber
   },
   content: {
     flexDirection: 'row',
@@ -133,8 +133,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   icon: {
-    fontSize: 16,
-    color: '#0088CC',
     marginRight: 8,
   },
   text: {
@@ -142,17 +140,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   textLight: {
-    color: '#333',
+    color: '#D97706',
   },
   textDark: {
-    color: '#FFF',
+    color: '#FFD54F',
   },
   dismissBtn: {
     paddingLeft: 12,
     paddingRight: 4,
-  },
-  dismissText: {
-    color: '#A0A0A0', // light gray
-    fontSize: 16,
   },
 });

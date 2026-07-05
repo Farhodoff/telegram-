@@ -104,16 +104,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   pill: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#0088CC', // Telegram blue outline
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#2A90F0',
     borderRadius: 20, // full pill shape
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     marginRight: 8, // 8px gap between pills
   },
   pillText: {
-    color: '#0088CC',
+    color: '#2A90F0',
     fontSize: 14,
     fontWeight: '500', // medium-weight text
   },

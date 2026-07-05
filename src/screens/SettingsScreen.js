@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Switch, ScrollView, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Switch, ScrollView, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Briefcase, Moon, Star, Check, X, LogOut } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useUserStore } from '../store/useUserStore';
+import { useChatStore } from '../store/useChatStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { COLORS, getAvatarColor, getInitials } from '../utils/colors';
 
 export default function SettingsScreen() {
-  const { user, setUser, settings, toggleTheme, toggleBiometric, restoreChats, chats } = useUserStore();
+  const { user, setUser, logout } = useUserStore();
+  const { settings, toggleTheme, toggleBiometric, toggleSmartMuteMode, toggleImportantContact, toggleGhostMode } = useSettingsStore();
+  const { chats, restoreChats } = useChatStore();
   const isDark = settings.theme === 'dark';
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -18,6 +23,8 @@ export default function SettingsScreen() {
   
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [editBio, setEditBio] = useState(user.bio || ''); // user.bio ni store'ga qo'shish kerak agar yo'q bo'lsa
+
+  const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
 
   const handlePickAvatar = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -167,6 +174,78 @@ export default function SettingsScreen() {
             </View>
           </View>
 
+          {/* Smart Mute Qismi */}
+          <Text style={[styles.sectionTitle, isDark && styles.textSecondaryDark]}>SMART MUTE</Text>
+          <View style={[styles.settingsSection, isDark && styles.sectionDark]}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingIconRow}>
+                <Briefcase color={isDark ? '#FFF' : '#333'} size={24} style={styles.settingIcon} />
+                <View>
+                  <Text style={[styles.settingText, isDark && styles.textDark]}>Ish vaqti rejimi</Text>
+                  <Text style={[styles.settingSubtext, isDark && styles.textSecondaryDark]}>09:00 - 18:00</Text>
+                </View>
+              </View>
+              <Switch 
+                value={settings.smartMute?.workMode} 
+                onValueChange={() => toggleSmartMuteMode('workMode')} 
+                trackColor={{ false: '#E5E5EA', true: COLORS.primary }} 
+                thumbColor="#FFF" 
+              />
+            </View>
+            <View style={[styles.separator, isDark && styles.separatorDark]} />
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingIconRow}>
+                <Moon color={isDark ? '#FFF' : '#333'} size={24} style={styles.settingIcon} />
+                <View>
+                  <Text style={[styles.settingText, isDark && styles.textDark]}>Uxlash vaqti rejimi</Text>
+                  <Text style={[styles.settingSubtext, isDark && styles.textSecondaryDark]}>23:00 - 07:00</Text>
+                </View>
+              </View>
+              <Switch 
+                value={settings.smartMute?.sleepMode} 
+                onValueChange={() => toggleSmartMuteMode('sleepMode')} 
+                trackColor={{ false: '#E5E5EA', true: COLORS.primary }} 
+                thumbColor="#FFF" 
+              />
+            </View>
+            <View style={[styles.separator, isDark && styles.separatorDark]} />
+            
+            <TouchableOpacity style={styles.settingItem} onPress={() => setIsContactsModalOpen(true)}>
+              <View style={styles.settingIconRow}>
+                <Star color={isDark ? '#FFF' : '#333'} size={24} style={styles.settingIcon} />
+                <Text style={[styles.settingText, isDark && styles.textDark]}>Muhim kontaktlar</Text>
+              </View>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <Text style={[styles.settingSubtext, isDark && styles.textSecondaryDark, {marginRight: 4}]}>
+                  {settings.smartMute?.importantContacts?.length || 0} ta
+                </Text>
+                <Text style={[styles.settingSubtext, isDark && styles.textSecondaryDark, {fontSize: 18}]}>›</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Maxfiylik va Xavfsizlik Qismi */}
+          <Text style={[styles.sectionTitle, isDark && styles.textSecondaryDark]}>MAXFIYLIK VA XAVFSIZLIK</Text>
+          <View style={[styles.settingsSection, isDark && styles.sectionDark]}>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingIconRow}>
+                <View>
+                  <Text style={[styles.settingText, isDark && styles.textDark]}>👻 Ghost Mode (Arvoh Rejimi)</Text>
+                  <Text style={[styles.settingSubtext, isDark && styles.textSecondaryDark]}>"Yozmoqda..." va o'qilganlik holatini yashirish</Text>
+                </View>
+              </View>
+              <Switch 
+                value={settings.ghostModeEnabled} 
+                onValueChange={toggleGhostMode}
+                trackColor={{ false: '#E5E5EA', true: COLORS.primary }}
+                thumbColor="#FFF"
+              />
+            </View>
+
+          </View>
+
           {/* Sozlamalar Qismi */}
           <Text style={[styles.sectionTitle, isDark && styles.textSecondaryDark]}>UMUMIY SOZLAMALAR</Text>
           <View style={[styles.settingsSection, isDark && styles.sectionDark]}>
@@ -205,8 +284,57 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
 
+          <View style={[styles.settingsSection, isDark && styles.sectionDark, { marginTop: 32 }]}>
+            <TouchableOpacity 
+              style={styles.settingItem} 
+              onPress={() => {
+                Alert.alert("Tizimdan chiqish", "Rostdan ham hisobingizdan chiqmoqchimisiz?", [
+                  { text: "Bekor qilish", style: "cancel" },
+                  { text: "Chiqish", style: "destructive", onPress: logout }
+                ]);
+              }}
+            >
+              <View style={styles.settingIconRow}>
+                <LogOut color="#FF3B30" size={24} style={styles.settingIcon} />
+                <Text style={[styles.settingText, { color: '#FF3B30' }]}>Tizimdan chiqish</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Muhim kontaktlar modal */}
+      <Modal visible={isContactsModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, isDark && styles.modalContentDark]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, isDark && styles.textDark]}>Muhim kontaktlar</Text>
+              <TouchableOpacity onPress={() => setIsContactsModalOpen(false)}>
+                <X color={isDark ? '#FFF' : '#000'} size={24} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={Object.values(chats)}
+              keyExtractor={item => item.id}
+              renderItem={({item}) => {
+                const isSelected = settings.smartMute?.importantContacts?.includes(item.id);
+                return (
+                  <TouchableOpacity style={[styles.contactItem, isDark && styles.contactItemDark]} onPress={() => toggleImportantContact(item.id)}>
+                    <AvatarView name={item.name} size={44} />
+                    <Text style={[styles.contactName, isDark && styles.textDark]}>{item.name}</Text>
+                    {isSelected ? (
+                      <Check color={COLORS.primary} size={24} />
+                    ) : (
+                      <View style={styles.emptyCheck} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -251,4 +379,17 @@ const styles = StyleSheet.create({
   settingsSection: { backgroundColor: COLORS.bgLight, borderTopWidth: 0.5, borderTopColor: COLORS.separatorLight, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
   settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   settingText: { fontSize: 16, color: COLORS.textPrimary },
+  settingSubtext: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  settingIconRow: { flexDirection: 'row', alignItems: 'center' },
+  settingIcon: { marginRight: 16 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '70%', paddingBottom: 20 },
+  modalContentDark: { backgroundColor: COLORS.headerDark },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
+  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  contactItem: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingHorizontal: 16, borderBottomWidth: 0.5, borderBottomColor: COLORS.separatorLight },
+  contactItemDark: { borderBottomColor: COLORS.separatorDark },
+  contactName: { fontSize: 16, flex: 1, marginLeft: 12 },
+  emptyCheck: { width: 24, height: 24, borderRadius: 6, borderWidth: 1, borderColor: COLORS.textSecondary, opacity: 0.5 },
 });

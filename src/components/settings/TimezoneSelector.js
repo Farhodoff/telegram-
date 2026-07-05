@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, StyleSheet } from 'react-native';
 import { useUserStore } from '../../store/useUserStore';
+import { useSettingsStore } from '../../store/useSettingsStore';
 import { userService } from '../../services/userService';
 
 const COMMON_TIMEZONES = [
@@ -13,8 +14,10 @@ const COMMON_TIMEZONES = [
 
 export const TimezoneSelector = () => {
   const { user, updateTimezone } = useUserStore();
+  const { settings } = useSettingsStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const isDark = settings.theme === 'dark';
 
   const handleSelectTimezone = async (tzId) => {
     setIsLoading(true);
