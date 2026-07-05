@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
-import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { useUserStore } from '../store/useUserStore';
+import { useChatStore } from '../store/useChatStore';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { useSocketStore } from '../store/useSocketStore';
+import { useAudioRecorder } from './useAudioRecorder';
 
 export function useChatRoomLogic(chatId, chatName) {
-  const { chats, settings, addMessage, deleteMessage, editMessage, translateMessage, markAsViewed, markAsRead, votePoll, addReaction, setChatWallpaper } = useUserStore();
+  const { token } = useUserStore();
+  const { chats, fetchMessages, addMessage, deleteMessage, editMessage, translateMessage, markAsViewed, markAsRead, votePoll, addReaction, setChatWallpaper } = useChatStore();
+  const { settings } = useSettingsStore();
   
   const chat = chats[chatId] || { messages: [], wallpaper: null };
   const isDark = settings.theme === 'dark';
@@ -17,13 +21,10 @@ export function useChatRoomLogic(chatId, chatName) {
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   
-  const [recording, setRecording] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordMode, setRecordMode] = useState('audio');
-  const cameraRef = useRef(null);
   const swipeableRefs = useRef({});
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
+
+  // Audio/Video Recorder Hook
+  const recorder = useAudioRecorder(chatId, addMessage);
 
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [reactionMessage, setReactionMessage] = useState(null);
@@ -43,6 +44,13 @@ export function useChatRoomLogic(chatId, chatName) {
   useEffect(() => {
     return sound ? () => { sound.unloadAsync(); } : undefined;
   }, [sound]);
+
+  // Load messages from backend
+  useEffect(() => {
+    if (token && chatId) {
+      fetchMessages(token, chatId, settings.ghostModeEnabled);
+    }
+  }, [token, chatId, settings.ghostModeEnabled]);
 
   // Mark all incoming messages as read when chat is opened
   useEffect(() => {
@@ -69,7 +77,9 @@ export function useChatRoomLogic(chatId, chatName) {
           replyToSender: replyingTo ? replyingTo.sender : null,
           reactions: {}
         };
-        addMessage(chatId, newMessage);
+        // Mahalliy saqlash o'rniga, Socket orqali yuboramiz. Socket Store o'zi mahalliy qo'shadi.
+        useSocketStore.getState().sendMessage(chatId, newMessage, null);
+        
         
         // Simulate typing indicator
         setIsTyping(true);
@@ -209,82 +219,6 @@ export function useChatRoomLogic(chatId, chatName) {
     }
   };
 
-  const toggleRecordMode = () => setRecordMode(prev => prev === 'audio' ? 'video' : 'audio');
-
-  const recordingRef = useRef(null);
-  const isPreparingRef = useRef(false);
-
-  const startRecording = async () => {
-    try {
-      if (recordMode === 'audio') {
-        if (isPreparingRef.current || recordingRef.current) return;
-        isPreparingRef.current = true;
-        
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== 'granted') {
-          isPreparingRef.current = false;
-          return;
-        }
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-        
-        const newRecording = new Audio.Recording();
-        await newRecording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        await newRecording.startAsync();
-        
-        recordingRef.current = newRecording;
-        setRecording(newRecording);
-        setIsRecording(true);
-        isPreparingRef.current = false;
-      } else {
-        if (!cameraPermission?.granted) await requestCameraPermission();
-        if (!microphonePermission?.granted) await requestMicrophonePermission();
-        setIsRecording(true);
-        // Video recording will be started by onCameraReady in ChatInputArea
-      }
-    } catch (err) {
-      isPreparingRef.current = false;
-      console.error('Recording failed', err);
-    }
-  };
-
-  const startVideoRecording = () => {
-    if (cameraRef.current && isRecording && recordMode === 'video') {
-      cameraRef.current.recordAsync().then(videoRecord => {
-        if (videoRecord) {
-          const newMessage = { id: Date.now().toString(), text: '', videoUrl: videoRecord.uri, sender: 'me', time: 'Hozir', reactions: {} };
-          addMessage(chatId, newMessage);
-        }
-      }).catch(err => console.log('Video recording error', err));
-    }
-  };
-
-  const stopRecording = async () => {
-    if (recordMode === 'audio') {
-      setIsRecording(false);
-      const activeRecording = recordingRef.current || recording;
-      if (!activeRecording) return;
-      
-      try {
-        await activeRecording.stopAndUnloadAsync();
-        const uri = activeRecording.getURI();
-        recordingRef.current = null;
-        setRecording(null);
-        if (uri) {
-          const newMessage = { id: Date.now().toString(), text: '', audioUrl: uri, sender: 'me', time: 'Hozir', reactions: {} };
-          addMessage(chatId, newMessage);
-        }
-      } catch(e) {
-        recordingRef.current = null;
-        setRecording(null);
-      }
-    } else {
-      setIsRecording(false);
-      if (cameraRef.current) {
-        cameraRef.current.stopRecording();
-      }
-    }
-  };
-
   const playSound = async (uri, msgId) => {
     if (sound) {
       await sound.unloadAsync();
@@ -314,19 +248,11 @@ export function useChatRoomLogic(chatId, chatName) {
   };
 
   let lastIncomingMessage = chat.messages.filter(m => m.sender === 'them').pop();
-  if (lastIncomingMessage && lastIncomingMessage.isEncrypted) {
-    try {
-      const { mockDecrypt } = require('../store/useUserStore');
-      lastIncomingMessage = { ...lastIncomingMessage, text: mockDecrypt(lastIncomingMessage.text) };
-    } catch (e) {
-      console.error('Decryption failed for smart reply');
-    }
-  }
 
   return {
     chat, chats, isDark, settings,
     inputText, setInputText, replyingTo, setReplyingTo, editingMessage, setEditingMessage,
-    recording, isRecording, recordMode, toggleRecordMode, startRecording, stopRecording, startVideoRecording, cameraRef,
+    recording: recorder.recording, isRecording: recorder.isRecording, recordMode: recorder.recordMode, toggleRecordMode: recorder.toggleRecordMode, startRecording: recorder.startRecording, stopRecording: recorder.stopRecording, startVideoRecording: recorder.startVideoRecording, cameraRef: recorder.cameraRef,
     swipeableRefs, selectedMessage, setSelectedMessage, reactionMessage, setReactionMessage,
     isSearching, setIsSearching, searchQuery, setSearchQuery, isForwarding, setIsForwarding,
     playingAudioId, playSound, stopSound, isAttachmentOpen, setIsAttachmentOpen,
@@ -334,6 +260,6 @@ export function useChatRoomLogic(chatId, chatName) {
     viewOnceImage, setViewOnceImage, isScheduleOpen, setIsScheduleOpen,
     handleSend, pickWallpaper, handleAction, handleForwardTo, pickImage, sendLocation,
     handleSchedule, handleCreatePoll, handleReaction, markAsViewed, votePoll, lastIncomingMessage, chatId, chatName,
-    isTyping, cameraPermission, requestCameraPermission, microphonePermission, requestMicrophonePermission
+    isTyping, cameraPermission: recorder.cameraPermission, requestCameraPermission: recorder.requestCameraPermission, microphonePermission: recorder.microphonePermission, requestMicrophonePermission: recorder.requestMicrophonePermission
   };
 }

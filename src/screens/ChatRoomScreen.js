@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { StyleSheet, View, FlatList, KeyboardAvoidingView, Platform, ImageBackground, LayoutAnimation, UIManager, TouchableOpacity, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -35,13 +35,21 @@ export default function ChatRoomScreen({ route, navigation }) {
   };
 
   // Matnni izlash filtri
-  const filteredMessages = chat.messages.filter(m => {
-    if (!isSearching || !searchQuery) return true;
-    return m.text && m.text.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredMessages = useMemo(() => {
+    return chat.messages.filter(m => {
+      if (!isSearching || !searchQuery) return true;
+      return m.text && m.text.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }, [chat.messages, isSearching, searchQuery]);
 
   // Eng yangisi pastda turishi uchun ro'yxatni teskarisiga aylantiramiz va inverted qilamiz
-  const reversedMessages = [...filteredMessages].reverse();
+  const reversedMessages = useMemo(() => [...filteredMessages].reverse(), [filteredMessages]);
+
+  const renderItem = useCallback(({ item }) => (
+    <MessageBubble msg={item} isDark={isDark} logic={logic} searchQuery={searchQuery} />
+  ), [isDark, logic, searchQuery]);
+
+  const keyExtractor = useCallback(item => item.id, []);
 
   return (
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
@@ -51,9 +59,11 @@ export default function ChatRoomScreen({ route, navigation }) {
         setIsSearching={setIsSearching} 
         searchQuery={searchQuery} 
         setSearchQuery={setSearchQuery} 
+        chatId={chatId}
         chatName={chatName} 
         navigation={navigation} 
         isTyping={logic.isTyping}
+        timezone={chat.timezone}
       />
 
       <ImageBackground 
@@ -64,8 +74,8 @@ export default function ChatRoomScreen({ route, navigation }) {
         <FlatList
           ref={flatListRef}
           data={reversedMessages}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => <MessageBubble msg={item} isDark={isDark} logic={logic} searchQuery={searchQuery} />}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
           contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 16 }}
           inverted={true}
           onScroll={handleScroll}
