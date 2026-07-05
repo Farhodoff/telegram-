@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Platform, Modal, ScrollView, Alert, Image, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Modal, ScrollView, Alert, Image, Switch } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Contacts from 'expo-contacts';
 import * as ImagePicker from 'expo-image-picker';
+import CryptoJS from 'crypto-js';
 import { useUserStore } from '../store/useUserStore';
 
 export default function ChatListScreen({ navigation }) {
@@ -27,6 +28,29 @@ export default function ChatListScreen({ navigation }) {
 
   const renderChatItem = ({ item }) => {
     const lastMessage = item.messages[item.messages.length - 1];
+    let displayLastText = 'Xabar yo\'q';
+    if (lastMessage) {
+      if (lastMessage.isEncrypted && lastMessage.text) {
+        try {
+          const secretKey = item.secretKey || 'fallback_key';
+          displayLastText = CryptoJS.AES.decrypt(lastMessage.text, secretKey).toString(CryptoJS.enc.Utf8) || 'Xabar';
+        } catch (e) {
+          displayLastText = '🔒 Shifrlangan xabar';
+        }
+      } else if (lastMessage.imageUrl) {
+        displayLastText = '🖼 Rasm';
+      } else if (lastMessage.audioUrl) {
+        displayLastText = '🎤 Ovozli xabar';
+      } else if (lastMessage.videoUrl) {
+        displayLastText = '🎥 Video xabar';
+      } else if (lastMessage.location) {
+        displayLastText = '📍 Joylashuv';
+      } else if (lastMessage.type === 'poll') {
+        displayLastText = '📊 ' + lastMessage.question;
+      } else {
+        displayLastText = lastMessage.text || 'Xabar';
+      }
+    }
     return (
       <TouchableOpacity 
         style={[styles.chatItem, isDark && styles.chatItemDark]}
@@ -38,7 +62,7 @@ export default function ChatListScreen({ navigation }) {
         <View style={styles.chatInfo}>
           <Text style={[styles.chatName, isDark && styles.textDark]}>{item.name}</Text>
           <Text numberOfLines={1} style={[styles.lastMessage, isDark && styles.lastMessageDark]}>
-            {lastMessage ? lastMessage.text : 'Xabar yo\'q'}
+            {displayLastText}
           </Text>
         </View>
         {lastMessage && (
@@ -83,16 +107,21 @@ export default function ChatListScreen({ navigation }) {
 
   const loadContacts = async () => {
     setIsContactsOpen(true);
-    const { status } = await Contacts.requestPermissionsAsync();
-    if (status === 'granted') {
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers],
-      });
-      if (data.length > 0) {
-        setContactsList(data);
+    try {
+      const Contacts = require('expo-contacts');
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status === 'granted') {
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.PhoneNumbers],
+        });
+        if (data.length > 0) {
+          setContactsList(data);
+        }
+      } else {
+        Alert.alert('Ruxsat yo\'q', 'Kontaktlarni o\'qish uchun ruxsat bering');
       }
-    } else {
-      Alert.alert('Ruxsat yo\'q', 'Kontaktlarni o\'qish uchun ruxsat bering');
+    } catch (e) {
+      Alert.alert('Xatolik', 'Kontaktlar moduli mavjud emas. Iltimos, development build yarating.');
     }
   };
 

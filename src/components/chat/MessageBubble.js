@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, Linking, StyleSheet } from 'react-native';
-import { Video } from 'expo-av';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { Swipeable } from 'react-native-gesture-handler';
 import CryptoJS from 'crypto-js';
 import { ReminderCard } from './ReminderCard';
 import { detectReminderIntent } from '../../utils/reminderHelper';
@@ -103,15 +102,10 @@ export function MessageBubble({ msg, isDark, logic }) {
 
           {msg.videoUrl && (
             <View style={styles.videoNoteContainer}>
-              <Video
-                source={{ uri: msg.videoUrl }}
-                style={styles.videoNote}
-                useNativeControls={false}
-                resizeMode="cover"
-                isLooping
-                shouldPlay
-                isMuted={false}
-              />
+              <View style={[styles.videoNote, {justifyContent: 'center', alignItems: 'center', backgroundColor: '#1C1C1E'}]}>
+                <Text style={{fontSize: 36}}>🎥</Text>
+                <Text style={{color: '#FFF', fontSize: 11, marginTop: 4}}>Video xabar</Text>
+              </View>
             </View>
           )}
 

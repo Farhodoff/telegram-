@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, View, SafeAreaView, FlatList, KeyboardAvoidingView, Platform, ImageBackground } from 'react-native';
+import { StyleSheet, View, FlatList, KeyboardAvoidingView, Platform, ImageBackground } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useChatRoomLogic } from '../hooks/useChatRoomLogic';
 import { ChatHeader } from '../components/chat/ChatHeader';

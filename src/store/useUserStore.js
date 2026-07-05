@@ -154,7 +154,7 @@ export const useUserStore = create(
           id: contactId,
           name: contactName,
           folder: 'Shaxsiy',
-          secretKey: CryptoJS.lib.WordArray.random(128/8).toString(),
+          secretKey: Date.now().toString(36) + Math.random().toString(36).substring(2),
           messages: []
         }
       }
