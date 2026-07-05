@@ -20,18 +20,27 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useUserStore } from './src/store/useUserStore';
+import { useSettingsStore } from './src/store/useSettingsStore';
+import { useSocketStore } from './src/store/useSocketStore';
 import { getDeviceTimezone } from './src/utils/timezoneHelper';
 import { COLORS } from './src/utils/colors';
 
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatRoomScreen from './src/screens/ChatRoomScreen';
+import ContactProfileScreen from './src/screens/ContactProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import CallsScreen from './src/screens/CallsScreen';
+
+// Auth Screens
+import LoginScreen from './src/screens/LoginScreen';
+import VerifyCodeScreen from './src/screens/VerifyCodeScreen';
+import ProfileSetupScreen from './src/screens/ProfileSetupScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
-  const { settings } = useUserStore();
+  const { settings } = useSettingsStore();
   const isDark = settings.theme === 'dark';
 
   return (
@@ -55,6 +64,14 @@ function MainTabs() {
         }} 
       />
       <Tab.Screen 
+        name="CallsTab" 
+        component={CallsScreen} 
+        options={{ 
+          title: 'Qo\'ng\'iroqlar',
+          tabBarIcon: ({ color }) => <Text style={{fontSize: 20, color}}>📞</Text>
+        }} 
+      />
+      <Tab.Screen 
         name="SettingsTab" 
         component={SettingsScreen} 
         options={{ 
@@ -67,8 +84,10 @@ function MainTabs() {
 }
 
 export default function App() {
-  const { user, updateTimezone, settings } = useUserStore();
-  const [isUnlocked, setIsUnlocked] = useState(!settings.biometricEnabled);
+  const { user, token, isAuthenticated, updateTimezone } = useUserStore();
+  const { settings } = useSettingsStore();
+  const { connect, disconnect } = useSocketStore();
+  const [isUnlocked, setIsUnlocked] = useState(!settings?.biometricEnabled);
 
   useEffect(() => {
     if (!user.timezone) {
@@ -78,12 +97,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (settings.biometricEnabled) {
+    // Socket.io ulanish mantiqi
+    if (isAuthenticated && token) {
+      connect(token, user.phone);
+    } else {
+      disconnect();
+    }
+  }, [isAuthenticated, token, user.phone]);
+
+  useEffect(() => {
+    if (settings?.biometricEnabled) {
       authenticate();
     } else {
       setIsUnlocked(true);
     }
-  }, [settings.biometricEnabled]);
+  }, [settings?.biometricEnabled]);
 
   const authenticate = async () => {
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
@@ -118,8 +146,21 @@ export default function App() {
       <SafeAreaProvider>
         <NavigationContainer>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
+            {!isAuthenticated ? (
+              // --- Auth Stack ---
+              <>
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="VerifyCode" component={VerifyCodeScreen} />
+                <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+              </>
+            ) : (
+              // --- Main Stack ---
+              <>
+                <Stack.Screen name="MainTabs" component={MainTabs} />
+                <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
+                <Stack.Screen name="ContactProfile" component={ContactProfileScreen} />
+              </>
+            )}
           </Stack.Navigator>
         </NavigationContainer>
       </SafeAreaProvider>
