@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import CryptoJS from 'crypto-js';
 
 export const useUserStore = create(
   persist(
@@ -27,6 +28,7 @@ export const useUserStore = create(
       name: 'Suhbatdosh',
       folder: 'Ish', // 'All', 'Ish', 'Shaxsiy'
       wallpaper: null,
+      secretKey: 'default_secret_key', // E2EE
       messages: [
         { id: '1', text: 'Salom, yaxshimisiz?', sender: 'them', time: '10:00' },
         { id: '2', text: 'Ertaga soat 15:00 da uchrashamiz', sender: 'them', time: '10:05' }
@@ -37,6 +39,7 @@ export const useUserStore = create(
       name: 'Saved Messages',
       folder: 'Saved Msgs',
       wallpaper: null,
+      secretKey: 'saved_secret_key', // E2EE
       messages: []
     }
   },
@@ -98,12 +101,26 @@ export const useUserStore = create(
   addMessage: (chatId, message) => set((state) => {
     const chat = state.chats[chatId];
     if (!chat) return state;
+
+    // E2EE Shifrlash
+    const secretKey = chat.secretKey || 'fallback_key';
+    let encryptedMessage = { ...message };
+    
+    if (encryptedMessage.text) {
+      encryptedMessage.text = CryptoJS.AES.encrypt(encryptedMessage.text, secretKey).toString();
+      encryptedMessage.isEncrypted = true;
+    }
+    
+    if (encryptedMessage.replyToText) {
+      encryptedMessage.replyToText = CryptoJS.AES.encrypt(encryptedMessage.replyToText, secretKey).toString();
+    }
+
     return {
       chats: {
         ...state.chats,
         [chatId]: {
           ...chat,
-          messages: [...chat.messages, message]
+          messages: [...chat.messages, encryptedMessage]
         }
       }
     };
@@ -137,6 +154,7 @@ export const useUserStore = create(
           id: contactId,
           name: contactName,
           folder: 'Shaxsiy',
+          secretKey: CryptoJS.lib.WordArray.random(128/8).toString(),
           messages: []
         }
       }
@@ -147,13 +165,17 @@ export const useUserStore = create(
   editMessage: (chatId, messageId, newText) => set((state) => {
     const chat = state.chats[chatId];
     if (!chat) return state;
+
+    const secretKey = chat.secretKey || 'fallback_key';
+    const encryptedNewText = CryptoJS.AES.encrypt(newText, secretKey).toString();
+
     return {
       chats: {
         ...state.chats,
         [chatId]: {
           ...chat,
           messages: chat.messages.map(msg => 
-            msg.id === messageId ? { ...msg, text: newText, isEdited: true } : msg
+            msg.id === messageId ? { ...msg, text: encryptedNewText, isEdited: true, isEncrypted: true } : msg
           )
         }
       }

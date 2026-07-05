@@ -2,14 +2,29 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, Linking, StyleSheet } from 'react-native';
 import { Video } from 'expo-av';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
+import CryptoJS from 'crypto-js';
 import { ReminderCard } from './ReminderCard';
 import { detectReminderIntent } from '../../utils/reminderHelper';
 
 export function MessageBubble({ msg, isDark, logic }) {
   const { 
-    chatId, swipeableRefs, setSelectedMessage, setReplyingTo, 
+    chatId, chat, swipeableRefs, setSelectedMessage, setReplyingTo, 
     setViewOnceImage, playSound, stopSound, playingAudioId, votePoll 
   } = logic;
+  
+  const secretKey = chat?.secretKey || 'fallback_key';
+  
+  let displayText = msg.text;
+  let displayReplyText = msg.replyToText;
+  
+  try {
+    if (msg.isEncrypted) {
+      if (msg.text) displayText = CryptoJS.AES.decrypt(msg.text, secretKey).toString(CryptoJS.enc.Utf8);
+      if (msg.replyToText) displayReplyText = CryptoJS.AES.decrypt(msg.replyToText, secretKey).toString(CryptoJS.enc.Utf8);
+    }
+  } catch (e) {
+    displayText = "🔒 Encrypted Message (Error)";
+  }
   
   const isThem = msg.sender === 'them';
   const hasReactions = msg.reactions && Object.keys(msg.reactions).length > 0;
@@ -26,27 +41,30 @@ export function MessageBubble({ msg, isDark, logic }) {
           </View>
         )}
         onSwipeableOpen={() => {
-          setReplyingTo({ id: msg.id, text: msg.text || 'Media', sender: msg.sender });
+          setReplyingTo({ id: msg.id, text: displayText || 'Media', sender: msg.sender });
           swipeableRefs.current[msg.id]?.close();
         }}
       >
         <TouchableOpacity 
           activeOpacity={1}
-          onLongPress={() => setSelectedMessage(msg)}
+          onLongPress={() => setSelectedMessage({...msg, text: displayText})}
           delayLongPress={300}
           style={[styles.bubble, isThem ? (isDark ? styles.bubbleThemDark : styles.bubbleThem) : styles.bubbleMe]}
         >
-          {msg.replyToText && (
+          {displayReplyText && (
             <View style={[styles.replyBoxInBubble, isThem ? (isDark ? styles.replyBoxThemDark : styles.replyBoxThem) : styles.replyBoxMe]}>
               <Text style={[styles.replySenderInBubble, isThem ? styles.replySenderThem : styles.replySenderMe]}>
                 {msg.replyToSender === 'me' ? 'Siz' : 'Suhbatdosh'}
               </Text>
               <Text numberOfLines={1} style={[styles.replyTextInBubble, isThem ? (isDark ? styles.textDark : {color: '#000'}) : styles.textMe]}>
-                {msg.replyToText}
+                {displayReplyText}
               </Text>
             </View>
           )}
-          <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{msg.text}</Text>
+          <View style={{flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap'}}>
+            <Text style={isThem ? (isDark ? styles.textDark : styles.textThem) : styles.textMe}>{displayText}</Text>
+            {msg.isEncrypted && <Text style={{fontSize: 10, marginLeft: 4, marginBottom: 2}}>🔒</Text>}
+          </View>
           
           {msg.isForwarded && (
             <Text style={[styles.forwardedText, isThem ? null : {color: '#E0E0E0'}]}>
@@ -166,9 +184,9 @@ export function MessageBubble({ msg, isDark, logic }) {
         </TouchableOpacity>
       </Swipeable>
       
-      {isThem && detectReminderIntent(msg.text) && (
+      {isThem && detectReminderIntent(displayText) && (
         <ReminderCard 
-          messageText={msg.text} 
+          messageText={displayText} 
           onDismiss={() => {}} 
         />
       )}

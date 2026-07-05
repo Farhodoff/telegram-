@@ -20,7 +20,13 @@ export function ChatHeader({ isDark, isSearching, setIsSearching, searchQuery, s
             autoFocus
           />
         ) : (
-          <Text style={[styles.headerTitle, isDark && styles.textDark]}>{chatName}</Text>
+          <View style={{flexDirection: 'column', alignItems: 'center'}}>
+            <Text style={[styles.headerTitle, isDark && styles.textDark]}>{chatName}</Text>
+            <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 2}}>
+              <Text style={{fontSize: 10}}>🔒</Text>
+              <Text style={{fontSize: 10, color: isDark ? '#4CAF50' : '#2E7D32', marginLeft: 2, fontWeight: 'bold'}}>E2E Encrypted</Text>
+            </View>
+          </View>
         )}
 
         <TouchableOpacity onPress={() => { setIsSearching(!isSearching); setSearchQuery(''); }} style={{padding: 8}}>

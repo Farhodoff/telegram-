@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import CryptoJS from 'crypto-js';
 import { useUserStore } from '../store/useUserStore';
 
 export function useChatRoomLogic(chatId, chatName) {
@@ -264,7 +265,16 @@ export function useChatRoomLogic(chatId, chatName) {
     }
   };
 
-  const lastIncomingMessage = chat.messages.filter(m => m.sender === 'them').pop();
+  let lastIncomingMessage = chat.messages.filter(m => m.sender === 'them').pop();
+  if (lastIncomingMessage && lastIncomingMessage.isEncrypted) {
+    const secretKey = chat.secretKey || 'fallback_key';
+    try {
+      const decryptedText = CryptoJS.AES.decrypt(lastIncomingMessage.text, secretKey).toString(CryptoJS.enc.Utf8);
+      lastIncomingMessage = { ...lastIncomingMessage, text: decryptedText };
+    } catch (e) {
+      console.error('Decryption failed for smart reply');
+    }
+  }
 
   return {
     chat, chats, isDark, settings,
