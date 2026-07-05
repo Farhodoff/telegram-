@@ -130,6 +130,23 @@ export const useUserStore = create((set) => ({
     };
   }),
 
+  // 1 marta ko'riladigan rasmni o'qilgan qilish
+  markAsViewed: (chatId, messageId) => set((state) => {
+    const chat = state.chats[chatId];
+    if (!chat) return state;
+    return {
+      chats: {
+        ...state.chats,
+        [chatId]: {
+          ...chat,
+          messages: chat.messages.map(msg => 
+            msg.id === messageId ? { ...msg, isViewed: true } : msg
+          )
+        }
+      }
+    };
+  }),
+
   // So'rovnomaga ovoz berish
   votePoll: (chatId, messageId, optionIndex) => set((state) => {
     const chat = state.chats[chatId];

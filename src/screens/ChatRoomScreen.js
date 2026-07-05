@@ -11,7 +11,7 @@ import { useUserStore } from '../store/useUserStore';
 
 export default function ChatRoomScreen({ route, navigation }) {
   const { chatId, chatName } = route.params;
-  const { user, settings, chats, addMessage, deleteMessage, editMessage, addReaction, setWallpaper, translateMessage, votePoll } = useUserStore();
+  const { user, settings, chats, addMessage, deleteMessage, editMessage, addReaction, setWallpaper, translateMessage, votePoll, markAsViewed } = useUserStore();
   const isDark = settings.theme === 'dark';
   
   const currentChat = chats[chatId] || { messages: [] };
@@ -46,6 +46,7 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [isCreatePollOpen, setIsCreatePollOpen] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
+  const [viewOnceImage, setViewOnceImage] = useState(null); // {id, uri} yoki null
 
   // Soundni tozalash
   useEffect(() => {
@@ -126,11 +127,11 @@ export default function ChatRoomScreen({ route, navigation }) {
     }
   };
 
-  const pickImage = async () => {
+  const pickImage = async (isViewOnce = false) => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.5,
+      quality: 0.8,
     });
 
     if (!result.canceled) {
@@ -138,6 +139,8 @@ export default function ChatRoomScreen({ route, navigation }) {
         id: Date.now().toString(), 
         text: '', 
         imageUrl: result.assets[0].uri,
+        isViewOnce,
+        isViewed: false,
         sender: 'me', 
         time: 'Hozir',
         reactions: {}
@@ -329,8 +332,26 @@ export default function ChatRoomScreen({ route, navigation }) {
                 )}
 
                 {/* Rasm mavjud bo'lsa */}
-                {msg.imageUrl && (
+                {msg.imageUrl && !msg.isViewOnce && (
                   <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
+                )}
+
+                {/* 1 marta ko'riladigan rasm mavjud bo'lsa */}
+                {msg.imageUrl && msg.isViewOnce && (
+                  <TouchableOpacity 
+                    style={[styles.viewOnceBtn, isThem && !isDark && {borderColor: '#0088CC'}]}
+                    onPress={() => {
+                      if (!msg.isViewed) {
+                        setViewOnceImage({ id: msg.id, uri: msg.imageUrl });
+                      }
+                    }}
+                    disabled={msg.isViewed}
+                  >
+                    <Text style={{fontSize: 20, marginRight: 8}}>💣</Text>
+                    <Text style={{color: isThem ? (isDark ? '#FFF' : '#0088CC') : '#FFF', fontWeight: 'bold'}}>
+                      {msg.isViewed ? 'Ochilgan' : '1 marta ko\'rish'}
+                    </Text>
+                  </TouchableOpacity>
                 )}
 
                 {/* Ovozli xabar mavjud bo'lsa */}
@@ -559,14 +580,37 @@ export default function ChatRoomScreen({ route, navigation }) {
       <Modal transparent visible={isAttachmentOpen} animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsAttachmentOpen(false)}>
           <View style={[styles.actionSheet, isDark && styles.actionSheetDark, { marginBottom: 80, alignSelf: 'center' }]}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(); }}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(false); }}>
               <Text style={styles.actionBtnText}>🖼 Rasm yuborish</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); pickImage(true); }}>
+              <Text style={styles.actionBtnText}>💣 1 marta ko'riladigan rasm</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} onPress={() => { setIsAttachmentOpen(false); setIsCreatePollOpen(true); }}>
               <Text style={styles.actionBtnText}>📊 So'rovnoma yaratish</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* View Once Image Modal */}
+      <Modal visible={!!viewOnceImage} transparent animationType="fade">
+        <View style={styles.fullScreenImageOverlay}>
+          {viewOnceImage && (
+            <>
+              <Image source={{ uri: viewOnceImage.uri }} style={{width: '100%', height: '100%', resizeMode: 'contain'}} />
+              <TouchableOpacity 
+                style={styles.closeImageBtn} 
+                onPress={() => {
+                  markAsViewed(chatId, viewOnceImage.id);
+                  setViewOnceImage(null);
+                }}
+              >
+                <Text style={{color: '#FFF', fontSize: 18, fontWeight: 'bold'}}>Yopish (Boshqa ochilmaydi)</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       </Modal>
 
       {/* Create Poll Modal */}
@@ -713,5 +757,10 @@ const styles = StyleSheet.create({
   pollOptionContent: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12 },
   pollOptionText: { fontSize: 14, color: '#000' },
   pollPercentText: { fontSize: 12, color: '#555' },
-  pollTotalVotes: { fontSize: 11, color: '#888', marginTop: 4, textAlign: 'right' }
+  pollTotalVotes: { fontSize: 11, color: '#888', marginTop: 4, textAlign: 'right' },
+
+  // View once
+  viewOnceBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 12 },
+  fullScreenImageOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  closeImageBtn: { position: 'absolute', bottom: 50, padding: 16, backgroundColor: 'rgba(255,0,0,0.8)', borderRadius: 24 }
 });
