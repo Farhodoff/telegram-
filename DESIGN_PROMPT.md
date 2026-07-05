@@ -1,4 +1,4 @@
-# Design Prompt — Telegram-Clone Yangi Funksiyalar
+# Design Prompt — Telegram Yangi Funksiyalar
 
 ## Umumiy dizayn yo'nalishi
 Modern messaging app UI (Telegram-style).

@@ -1,4 +1,4 @@
-# Telegram-Clone — Yangi Funksiyalar Roadmap va Task Ro'yxati
+# Telegram — Yangi Funksiyalar Roadmap va Task Ro'yxati
 
 ## Funksiyalar
 1. Timezone Indicator (vaqt zonasi ko'rsatkichi)
